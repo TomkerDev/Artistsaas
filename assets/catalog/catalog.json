@@ -1,0 +1,68 @@
+[
+  {
+    "id": "demo-01",
+    "title": "Nuit blanche",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 1,
+    "release_year": 2026,
+    "duration_ms": 24000,
+    "audio_asset": "assets/audio/demo-01.wav",
+    "is_downloadable": true
+  },
+  {
+    "id": "demo-02",
+    "title": "Sillage",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 2,
+    "release_year": 2026,
+    "duration_ms": 21000,
+    "audio_asset": "assets/audio/demo-02.wav",
+    "is_downloadable": true
+  },
+  {
+    "id": "demo-03",
+    "title": "Écho",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 3,
+    "release_year": 2026,
+    "duration_ms": 18000,
+    "audio_asset": "assets/audio/demo-03.wav",
+    "is_downloadable": true
+  },
+  {
+    "id": "demo-04",
+    "title": "Ligne d'horizon",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 4,
+    "release_year": 2026,
+    "duration_ms": 26000,
+    "audio_asset": "assets/audio/demo-04.wav",
+    "is_downloadable": true
+  },
+  {
+    "id": "demo-05",
+    "title": "Marée haute",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 5,
+    "release_year": 2026,
+    "duration_ms": 24000,
+    "audio_asset": "assets/audio/demo-05.wav",
+    "is_downloadable": true
+  },
+  {
+    "id": "demo-06",
+    "title": "Dernier métro",
+    "artist": "Artistsaas",
+    "album": "Démo 2026",
+    "track_number": 6,
+    "release_year": 2026,
+    "duration_ms": 20000,
+    "audio_asset": "assets/audio/demo-06.wav",
+    "is_downloadable": true
+  }
+]
