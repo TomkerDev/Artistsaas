@@ -31,4 +31,34 @@ abstract final class AppStrings {
   static const String playerPlaceholder = 'Le lecteur audio sera affiché ici.';
   static const String myMusicPlaceholder =
       'Les morceaux téléchargés seront affichés ici.';
+
+  // Écran Lecteur.
+  static const String playerEmptyMessage =
+      'Choisissez un morceau dans le catalogue pour lancer la lecture.';
+  static const String playerQueueTitle = 'File de lecture';
+  static const String playerErrorTitle = 'Lecture impossible';
+
+  // Actions de lecture.
+  static const String playAction = 'Lire';
+  static const String pauseAction = 'Pause';
+  static const String previousAction = 'Morceau précédent';
+  static const String nextAction = 'Morceau suivant';
+
+  // Écran Ma musique.
+  static const String myMusicEmptyMessage =
+      'Aucun morceau téléchargé pour le moment.\n'
+      'Téléchargez un morceau depuis le catalogue pour l\'écouter hors connexion.';
+  static const String myMusicDownloadedAt = 'Téléchargé le';
+
+  // Actions de téléchargement.
+  static const String downloadAction = 'Télécharger';
+  static const String deleteAction = 'Supprimer';
+  static const String downloadStartedMessage =
+      'Téléchargement en cours…';
+  static const String downloadCompletedMessage =
+      'Morceau disponible hors connexion.';
+  static const String deleteConfirmTitle = 'Supprimer ce morceau ?';
+  static const String deleteConfirmMessage =
+      'La copie locale sera définitivement supprimée de l\'appareil.';
+  static const String cancelAction = 'Annuler';
 }

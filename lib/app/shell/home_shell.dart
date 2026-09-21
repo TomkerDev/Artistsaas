@@ -4,14 +4,18 @@ import '../../core/constants/app_strings.dart';
 import '../../features/catalog/presentation/home_screen.dart';
 import '../../features/library/presentation/my_music_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
+import 'mini_player.dart';
+
+/// Onglet sélectionné, partagé entre la coquille et le mini-lecteur.
+final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
 
 /// Coquille principale de l'application : barre d'onglets et contenu des trois
 /// écrans du MVP.
 ///
 /// Les écrans sont conservés dans un `IndexedStack` afin de préserver leur état
 /// (position de défilement du catalogue, onglet du lecteur) lors du changement
-/// d'onglet. Le mini-lecteur persistant viendra s'insérer ici, entre le contenu
-/// et la barre d'onglets.
+/// d'onglet. Le mini-lecteur persistant s'insère ici, entre le contenu et la
+/// barre d'onglets.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -28,17 +32,45 @@ class _HomeShellState extends State<HomeShell> {
 
   int _selectedIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+    selectedTabNotifier.addListener(_onTabRequested);
+  }
+
+  @override
+  void dispose() {
+    selectedTabNotifier.removeListener(_onTabRequested);
+    super.dispose();
+  }
+
+  /// Demande de navigation venant du mini-lecteur.
+  void _onTabRequested() {
+    final int requested = selectedTabNotifier.value;
+    if (requested != _selectedIndex) {
+      setState(() => _selectedIndex = requested);
+    }
+  }
+
   void _onDestinationSelected(int index) {
     if (index == _selectedIndex) {
       return;
     }
+    selectedTabNotifier.value = index;
     setState(() => _selectedIndex = index);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: _screens),
+      body: Column(
+        children: <Widget>[
+          Expanded(
+            child: IndexedStack(index: _selectedIndex, children: _screens),
+          ),
+          const MiniPlayer(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onDestinationSelected,
