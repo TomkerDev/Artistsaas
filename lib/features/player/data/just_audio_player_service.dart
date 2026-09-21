@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../domain/entities/playback_media.dart';
@@ -19,6 +20,11 @@ import '../domain/services/audio_player_service.dart';
 /// Les erreurs d'exécution (asset illisible, fichier absent, focus audio) ne
 /// sont jamais levées vers l'interface : elles sont publiées dans
 /// `PlaybackState.errorMessage`, conformément au contrat du domaine.
+///
+/// Lecture en arrière-plan : chaque source est étiquetée avec une `MediaItem`
+/// (`just_audio_background`) qui alimente la notification média système et les
+/// contrôles casque / écran verrouillé. Le plugin exige un tag sur **toutes**
+/// les sources de la file, sans quoi la lecture lève une erreur sur mobile.
 class JustAudioPlayerService implements AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
 
@@ -189,14 +195,30 @@ class JustAudioPlayerService implements AudioPlayerService {
     await _player.dispose();
   }
 
-  /// Traduit une source de domaine en source `just_audio`.
+  /// Traduit une source de domaine en source `just_audio` étiquetée.
+  ///
+  /// Le tag `MediaItem` est la seule exigence de `just_audio_background` :
+  /// sans lui, la lecture échoue sur Android/iOS. La pochette n'est pas
+  /// transmise à la notification pour le MVP (les pochettes du catalogue sont
+  /// des assets Flutter, sans URI accessible au service natif) ; l'ajout se
+  /// fera via `artUri` lorsque des pochettes fichier/distantes seront fournies.
   AudioSource _audioSourceOf(PlaybackMedia media) {
+    final MediaItem tag = MediaItem(
+      id: media.trackId,
+      title: media.title,
+      artist: media.artist,
+      album: 'Artistsaas',
+    );
     return switch (media.source) {
       AssetPlaybackSource(:final String assetPath) => AudioSource.asset(
         assetPath,
+        tag: tag,
       ),
-      FilePlaybackSource(:final String filePath) => AudioSource.file(filePath),
-      NetworkPlaybackSource(:final Uri uri) => AudioSource.uri(uri),
+      FilePlaybackSource(:final String filePath) => AudioSource.file(
+        filePath,
+        tag: tag,
+      ),
+      NetworkPlaybackSource(:final Uri uri) => AudioSource.uri(uri, tag: tag),
     };
   }
 
