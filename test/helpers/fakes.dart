@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:artistsaas/features/catalog/domain/datasources/catalog_data_source.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/music_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Construit une piste de test, seules les valeurs utiles au cas testé étant
@@ -39,63 +39,51 @@ Track buildTrack({
 /// Source de catalogue pilotée par le test : liste fixe, panne simulée, et
 /// comptage des lectures pour vérifier la mise en cache.
 final class FakeCatalogDataSource implements CatalogDataSource {
-  FakeCatalogDataSource({List<Track>? tracks, Object? failure})
-    : _tracks = tracks ?? const <Track>[],
-      _failure = failure;
-
-  List<Track> _tracks;
-  Object? _failure;
+  FakeCatalogDataSource({List<Track>? tracks, this.failure})
+    : tracks = tracks ?? const <Track>[];
 
   /// Nombre de lectures demandées à la source.
   int fetchCount = 0;
 
   /// Pistes renvoyées lors des prochaines lectures.
-  List<Track> get tracks => _tracks;
-  set tracks(List<Track> value) => _tracks = value;
+  List<Track> tracks;
 
   /// Erreur levée lors des prochaines lectures, `null` pour réussir.
-  Object? get failure => _failure;
-  set failure(Object? value) => _failure = value;
+  Object? failure;
 
   @override
   Future<List<Track>> fetchTracks() async {
     fetchCount++;
-    final Object? failure = _failure;
-    if (failure != null) {
-      throw failure;
+    final Object? currentFailure = failure;
+    if (currentFailure != null) {
+      throw currentFailure;
     }
-    return _tracks;
+    return tracks;
   }
 }
 
 /// Dépôt de catalogue factice, utilisé par les tests de contrôleur et d'écran.
 final class FakeMusicRepository implements MusicRepository {
-  FakeMusicRepository({List<Track>? tracks, Object? failure})
-    : _tracks = tracks ?? const <Track>[],
-      _failure = failure;
-
-  List<Track> _tracks;
-  Object? _failure;
+  FakeMusicRepository({List<Track>? tracks, this.failure})
+    : tracks = tracks ?? const <Track>[];
 
   /// Nombre d'appels reçus.
   int callCount = 0;
 
   /// Pistes renvoyées lors des prochains appels.
-  List<Track> get tracks => _tracks;
-  set tracks(List<Track> value) => _tracks = value;
+  List<Track> tracks;
 
   /// Erreur levée lors des prochains appels, `null` pour réussir.
-  Object? get failure => _failure;
-  set failure(Object? value) => _failure = value;
+  Object? failure;
 
   @override
   Future<List<Track>> getTracks() async {
     callCount++;
-    final Object? failure = _failure;
-    if (failure != null) {
-      throw failure;
+    final Object? currentFailure = failure;
+    if (currentFailure != null) {
+      throw currentFailure;
     }
-    return _tracks;
+    return tracks;
   }
 }
 

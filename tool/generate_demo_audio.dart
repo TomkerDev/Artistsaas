@@ -29,7 +29,6 @@ const double _amplitude = 0.32;
 
 // Fréquences des notes utilisées (en hertz).
 const double _a3 = 220.00;
-const double _b3 = 246.94;
 const double _c4 = 261.63;
 const double _d4 = 293.66;
 const double _e4 = 329.63;
