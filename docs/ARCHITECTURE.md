@@ -64,22 +64,40 @@ le repository : ils observent les providers.
 - `data/repositories/music_repository_impl.dart` : implémente le contrat avec mise en cache
 - `presentation/` : `CatalogController` (état async), `HomeScreen`, `TrackListTile`
 
-### `player` — moteur audio (contrats + écran)
+### `player` — moteur audio (complet)
 
-- `domain/entities/` : `PlaybackMedia`, `PlaybackSource`, `PlaybackState`
-- `domain/services/audio_player_service.dart` : interface du moteur (queue, play/pause,
-  seek, skip, flux d'état). Les erreurs d'exécution sont publiées dans
-  `PlaybackState.errorMessage` plutôt que levées, pour ne pas casser le flux observé.
-- `domain/services/playback_source_resolver.dart` : résolution des sources
-  (asset embarqué vs fichier téléchargé)
-- `presentation/player_screen.dart` : écran Lecteur (squelette)
+- `domain/entities/` : `PlaybackMedia`, `PlaybackSource` (sealed : asset /
+  fichier / réseau), `PlaybackState`
+- `domain/services/audio_player_service.dart` : interface du moteur (queue,
+  play/pause, seek, skip, flux d'état). Les erreurs d'exécution sont publiées
+  dans `PlaybackState.errorMessage` plutôt que levées.
+- `domain/services/playback_source_resolver.dart` : contrat de résolution des
+  sources (copie locale → distant → embarqué)
+- `data/just_audio_player_service.dart` : implémentation `just_audio` — seul
+  endroit de l'application qui connaît la bibliothèque de lecture
+- `data/default_playback_source_resolver.dart` : applique la règle de priorité
+- `presentation/` : `PlaybackController` (file, commandes, état),
+  `PlayerScreen` (pochette, barre de progression avec seek, contrôles,
+  erreur acquittable)
 
-### `library` — téléchargements (contrats + écran)
+### `library` — téléchargements (complet)
 
 - `domain/entities/downloaded_track.dart` / `download_progress.dart`
-- `domain/repositories/download_repository.dart` : contrat de téléchargement
-  (« matérialiser » le morceau dans `<documents>/downloads/<id>.mp3`)
-- `presentation/my_music_screen.dart` : écran « Ma musique » (squelette)
+- `domain/repositories/download_repository.dart` : contrat (flux de copies,
+  téléchargement, suppression, chemin local)
+- `data/local_download_repository.dart` : copie des assets vers
+  `<documents>/downloads/<id>.<ext>` par blocs de 64 Ko (progression réelle),
+  indexation `sqflite` (`<databases>/artistsaas.db`, table `downloaded_tracks`)
+- `presentation/` : `downloadedTracksProvider` / `downloadProgressProvider`,
+  `MyMusicScreen` (liste avec taille et date, lecture, suppression confirmée)
+
+### `app/shell` — coquille et mini-lecteur
+
+- `home_shell.dart` : `IndexedStack` + `NavigationBar` ; l'onglet actif est
+  partagé via `selectedTabNotifier` pour permettre la navigation depuis le
+  mini-lecteur
+- `mini_player.dart` : barre persistante (progression, titre, play/pause,
+  suivant) affichée dès qu'un morceau est en file ; un tap ouvre le lecteur
 
 ## Assets et contenu embarqué
 

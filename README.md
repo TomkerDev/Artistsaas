@@ -11,8 +11,8 @@ téléchargés hors connexion.
 | 0 | Squelette du projet Android, thème, coquille à 3 onglets | **réalisée** |
 | 1 | Modèles et contrats de domaine (`Track`, `PlaybackState`, interfaces) | **réalisée** |
 | 2 | Catalogue local (`catalog.json` + audio en assets) et écran Accueil | **réalisée** |
-| 3 | Moteur audio `just_audio`, écran Lecteur, mini-lecteur | partiel (contrats + écran squelette) |
-| 4 | Téléchargements (copie locale + `sqflite`) et écran Ma musique | partiel (contrats + écran squelette) |
+| 3 | Moteur audio `just_audio`, écran Lecteur, mini-lecteur | **réalisée** |
+| 4 | Téléchargements (copie locale + `sqflite`) et écran Ma musique | **réalisée** |
 | 5 | Intégration, README complet, build release | à venir |
 
 ## Décisions actées
