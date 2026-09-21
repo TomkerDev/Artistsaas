@@ -21,12 +21,26 @@ final class _PendingMusicRepository implements MusicRepository {
 }
 
 void main() {
+  FakeDownloadRepository? downloadRepository;
+  FakeAudioPlayerService? audioPlayerService;
+
+  List<Override> overrides(MusicRepository repository) => <Override>[
+    musicRepositoryProvider.overrideWithValue(repository),
+    downloadRepositoryProvider.overrideWithValue(
+      downloadRepository ??= FakeDownloadRepository(),
+    ),
+    audioPlayerServiceProvider.overrideWithValue(
+      audioPlayerService ??= FakeAudioPlayerService(),
+    ),
+    playbackSourceResolverProvider.overrideWithValue(
+      FakePlaybackSourceResolver(),
+    ),
+  ];
+
   Future<void> pumpHome(WidgetTester tester, MusicRepository repository) {
     return tester.pumpWidget(
       ProviderScope(
-        overrides: <Override>[
-          musicRepositoryProvider.overrideWithValue(repository),
-        ],
+        overrides: overrides(repository),
         child: const MaterialApp(home: HomeScreen()),
       ),
     );
@@ -61,6 +75,7 @@ void main() {
               artist: 'Artiste',
               album: null,
               duration: const Duration(minutes: 1, seconds: 5),
+              isDownloadable: false,
             ),
           ],
         ),
@@ -72,8 +87,30 @@ void main() {
       expect(find.text('Artiste · Album 2026'), findsOneWidget);
       expect(find.text('Second morceau'), findsOneWidget);
       expect(find.text('Artiste'), findsOneWidget);
-      expect(find.text('0:30'), findsOneWidget);
+      // La durée laisse la place au bouton de téléchargement lorsque le
+      // morceau est téléchargeable ; elle s'affiche sinon.
       expect(find.text('1:05'), findsOneWidget);
+    });
+
+    testWidgets('le bouton de téléchargement matérialise le morceau', (
+      WidgetTester tester,
+    ) async {
+      await pumpHome(
+        tester,
+        FakeMusicRepository(
+          tracks: <Track>[buildTrack(id: 'a', title: 'Morceau téléchargeable')],
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.download_outlined));
+      await tester.pumpAndSettle();
+
+      expect(downloadRepository!.downloadCount, 1);
+      expect(
+        find.text(AppStrings.downloadCompletedMessage),
+        findsOneWidget,
+      );
     });
 
     testWidgets('affiche un message lorsque le catalogue est vide', (

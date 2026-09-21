@@ -16,7 +16,9 @@ void main() {
   /// Monte l'application complète, comme le fait `main.dart`.
   ///
   /// Le dépôt de catalogue est remplacé par un faux : le test ne dépend donc ni
-  /// du regroupement d'assets ni du contenu réel du catalogue.
+  /// du regroupement d'assets ni du contenu réel du catalogue. Les dépendances
+  /// audio et de téléchargement sont également remplacées afin que le test ne
+  /// touche ni au moteur natif ni au stockage.
   Future<void> pumpApp(WidgetTester tester, {List<Track>? tracks}) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -25,6 +27,15 @@ void main() {
             FakeMusicRepository(
               tracks: tracks ?? <Track>[buildTrack(title: 'Titre affiché')],
             ),
+          ),
+          downloadRepositoryProvider.overrideWithValue(
+            FakeDownloadRepository(),
+          ),
+          audioPlayerServiceProvider.overrideWithValue(
+            FakeAudioPlayerService(),
+          ),
+          playbackSourceResolverProvider.overrideWithValue(
+            FakePlaybackSourceResolver(),
           ),
         ],
         child: const ArtistApp(),
@@ -75,14 +86,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(selectedTab(tester), 2);
       expect(find.byType(MyMusicScreen), findsOneWidget);
-      expect(find.text(AppStrings.myMusicPlaceholder), findsOneWidget);
+      expect(find.text(AppStrings.myMusicEmptyMessage), findsOneWidget);
       expect(find.byType(HomeScreen), findsNothing);
 
       await tester.tap(find.byIcon(Icons.play_circle_outline));
       await tester.pumpAndSettle();
       expect(selectedTab(tester), 1);
       expect(find.byType(PlayerScreen), findsOneWidget);
-      expect(find.text(AppStrings.playerPlaceholder), findsOneWidget);
+      expect(find.text(AppStrings.playerEmptyMessage), findsOneWidget);
       expect(find.byType(MyMusicScreen), findsNothing);
 
       await tester.tap(find.byIcon(Icons.home_outlined));

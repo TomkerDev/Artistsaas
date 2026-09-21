@@ -1,30 +1,64 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/utils/duration_formatter.dart';
+import '../../../library/domain/entities/download_progress.dart';
 import '../../domain/entities/track.dart';
 
-/// Ligne du catalogue : pochette, titre, artiste/album et durée.
+/// Ligne du catalogue : pochette, titre, artiste/album, durée et actions.
 ///
-/// Widget purement présentationnel : il reçoit sa piste et n'accède ni au
-/// catalogue ni au moteur audio. La commande de lecture, puis l'indicateur de
-/// téléchargement, lui seront ajoutés aux étapes 3 et 4.
+/// Widget purement présentationnel : il reçoit sa piste et les callbacks
+/// (`onPlay`, `onDownload`) sans accéder ni au catalogue ni au moteur audio ni
+/// au stockage. L'indicateur de téléchargement reflète le [DownloadProgress]
+/// fourni par l'écran parent.
 class TrackListTile extends StatelessWidget {
-  const TrackListTile({required this.track, super.key});
+  const TrackListTile({
+    required this.track,
+    this.onPlay,
+    this.onDownload,
+    this.downloadProgress,
+    this.isPlaying = false,
+    super.key,
+  });
 
   /// Piste affichée.
   final Track track;
+
+  /// Lecture de la piste ; `null` rend la ligne non cliquable.
+  final VoidCallback? onPlay;
+
+  /// Téléchargement de la piste ; `null` masque l'action.
+  final VoidCallback? onDownload;
+
+  /// État de matérialisation locale, `null` si jamais demandée.
+  final DownloadProgress? downloadProgress;
+
+  /// `true` lorsque la piste est celle en cours de lecture.
+  final bool isPlaying;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
 
     return ListTile(
-      leading: _CoverPlaceholder(title: track.title),
-      title: Text(track.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      onTap: onPlay,
+      leading: _CoverPlaceholder(title: track.title, isPlaying: isPlaying),
+      title: Text(
+        track.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: isPlaying
+            ? theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.primary,
+                fontWeight: FontWeight.bold,
+              )
+            : null,
+      ),
       subtitle: Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Text(
-        DurationFormatter.format(track.duration),
-        style: theme.textTheme.labelMedium,
+      trailing: _TrailingAction(
+        track: track,
+        onDownload: onDownload,
+        progress: downloadProgress,
+        durationLabel: DurationFormatter.format(track.duration),
       ),
     );
   }
@@ -39,15 +73,69 @@ class TrackListTile extends StatelessWidget {
   }
 }
 
+/// Zone de droite de la ligne : progression, état ou durée.
+class _TrailingAction extends StatelessWidget {
+  const _TrailingAction({
+    required this.track,
+    required this.durationLabel,
+    this.onDownload,
+    this.progress,
+  });
+
+  final Track track;
+  final String durationLabel;
+  final VoidCallback? onDownload;
+  final DownloadProgress? progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final DownloadProgress? progress = this.progress;
+    if (progress != null && progress.isRunning) {
+      return SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          value: progress.fraction,
+          strokeWidth: 2.5,
+        ),
+      );
+    }
+    if (progress != null && progress.hasFailed) {
+      return Tooltip(
+        message: progress.errorMessage ?? 'Échec du téléchargement',
+        child: Icon(
+          Icons.error_outline,
+          color: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
+    if (progress != null && progress.isCompleted) {
+      return const Tooltip(
+        message: 'Disponible hors connexion',
+        child: Icon(Icons.download_done_outlined),
+      );
+    }
+    if (onDownload != null && track.isDownloadable) {
+      return IconButton(
+        icon: const Icon(Icons.download_outlined),
+        tooltip: 'Télécharger',
+        onPressed: onDownload,
+      );
+    }
+    return Text(durationLabel);
+  }
+}
+
 /// Visuel de remplacement utilisé tant qu'aucune pochette n'est fournie.
 ///
 /// L'identité visuelle de l'artiste n'étant pas encore disponible, la pochette
 /// est un dégradé portant l'initiale du titre : l'interface reste lisible sans
 /// inventer de contenu graphique.
 class _CoverPlaceholder extends StatelessWidget {
-  const _CoverPlaceholder({required this.title});
+  const _CoverPlaceholder({required this.title, this.isPlaying = false});
 
   final String title;
+  final bool isPlaying;
 
   @override
   Widget build(BuildContext context) {
@@ -66,12 +154,14 @@ class _CoverPlaceholder extends StatelessWidget {
         ),
       ),
       alignment: Alignment.center,
-      child: Text(
-        title.isEmpty ? '?' : title.substring(0, 1).toUpperCase(),
-        style: theme.textTheme.titleMedium?.copyWith(
-          color: colors.onPrimaryContainer,
-        ),
-      ),
+      child: isPlaying
+          ? Icon(Icons.equalizer, color: colors.onPrimaryContainer)
+          : Text(
+              title.isEmpty ? '?' : title.substring(0, 1).toUpperCase(),
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: colors.onPrimaryContainer,
+              ),
+            ),
     );
   }
 }

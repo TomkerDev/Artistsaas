@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/errors/app_exception.dart';
+import '../../library/domain/entities/download_progress.dart';
+import '../../library/presentation/downloads_providers.dart';
+import '../../player/domain/entities/playback_state.dart';
+import '../../player/presentation/playback_controller.dart';
 import '../domain/entities/track.dart';
 import 'catalog_controller.dart';
 import 'widgets/track_list_tile.dart';
@@ -12,6 +17,10 @@ import 'widgets/track_list_tile.dart';
 /// L'écran ignore totalement d'où viennent les données : il observe le
 /// `CatalogController` et rend l'un des quatre états possibles — chargement,
 /// erreur avec possibilité de réessayer, catalogue vide, ou liste des morceaux.
+///
+/// Actions par morceau :
+/// - un tap lance la lecture du catalogue à partir de cette piste ;
+/// - l'icône de téléchargement matérialise le morceau dans le stockage local.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
@@ -37,21 +46,87 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-/// Liste des pistes du catalogue, dans l'ordre fourni par le repository.
-class _TrackList extends StatelessWidget {
+/// Liste des pistes du catalogue, avec actions de lecture et de téléchargement.
+class _TrackList extends ConsumerWidget {
   const _TrackList({required this.tracks});
 
   final List<Track> tracks;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final Map<String, DownloadProgress> progress = ref.watch(
+      downloadProgressProvider,
+    ).value ?? const <String, DownloadProgress>{};
+    final String? currentTrackId = ref.watch(
+      playbackControllerProvider.select(
+        (PlaybackState state) => state.currentMedia?.trackId,
+      ),
+    );
+
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: tracks.length,
       separatorBuilder: (BuildContext context, int index) =>
           const Divider(height: 1, indent: 72),
-      itemBuilder: (BuildContext context, int index) =>
-          TrackListTile(track: tracks[index]),
+      itemBuilder: (BuildContext context, int index) {
+        final Track track = tracks[index];
+        return TrackListTile(
+          track: track,
+          isPlaying: track.id == currentTrackId,
+          downloadProgress: progress[track.id],
+          onPlay: () => _play(ref, index),
+          onDownload: () => _download(context, ref, track),
+        );
+      },
+    );
+  }
+
+  Future<void> _play(WidgetRef ref, int index) async {
+    try {
+      await ref
+          .read(playbackControllerProvider.notifier)
+          .playCatalog(tracks, initialIndex: index);
+    } on Object {
+      // L'erreur est déjà publiée dans l'état de lecture et affichée par le
+      // lecteur ; rien d'autre à faire ici.
+    }
+  }
+
+  Future<void> _download(
+    BuildContext context,
+    WidgetRef ref,
+    Track track,
+  ) async {
+    try {
+      await ref.read(downloadRepositoryProvider).download(track);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(AppStrings.downloadCompletedMessage),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } on Object catch (error) {
+      if (context.mounted) {
+        showErrorSnackBar(context, error);
+      }
+    }
+  }
+}
+
+/// Message d'erreur uniforme pour les actions utilisateur.
+///
+/// Le message métier est privilégié lorsqu'il existe (`AppException`) ; le
+/// message technique reste destiné aux journaux.
+void showErrorSnackBar(BuildContext context, Object error) {
+  final String message = error is AppException
+      ? error.message
+      : 'Une erreur inattendue est survenue.';
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
     );
   }
 }
