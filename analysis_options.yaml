@@ -1,0 +1,30 @@
+# Configuration de l'analyse statique du projet.
+#
+# Base : les règles recommandées par l'équipe Flutter, renforcées par quelques
+# règles supplémentaires afin de garder le code homogène et d'éviter les erreurs
+# silencieuses (casts implicites, inférence `dynamic`, imports morts).
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    # Aucune conversion implicite qui masquerait une erreur de type.
+    strict-casts: true
+    # Les types génériques doivent être explicites (pas de List "brut").
+    strict-raw-types: true
+    # Une inférence qui aboutit à `dynamic` est signalée.
+    strict-inference: true
+  errors:
+    unused_import: error
+    # Les commentaires TODO ne doivent pas faire échouer `flutter analyze`.
+    todo: ignore
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_print
+    - directives_ordering
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_single_quotes
+    - sort_child_properties_last
+    - unawaited_futures
