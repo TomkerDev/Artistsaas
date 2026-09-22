@@ -61,6 +61,20 @@ void main() {
     }
   });
 
+  test('chaque piste référence une pochette présente', () {
+    for (final Track track in tracks) {
+      final String? cover = track.coverAsset;
+      if (cover == null) {
+        continue;
+      }
+      expect(
+        File(cover).existsSync(),
+        isTrue,
+        reason: '${track.id} référence une pochette absente : $cover',
+      );
+    }
+  });
+
   test('la durée déclarée correspond à celle du fichier audio', () async {
     for (final Track track in tracks) {
       expect(

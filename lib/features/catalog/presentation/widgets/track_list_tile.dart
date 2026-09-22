@@ -41,7 +41,13 @@ class TrackListTile extends StatelessWidget {
 
     return ListTile(
       onTap: onPlay,
-      leading: _CoverPlaceholder(title: track.title, isPlaying: isPlaying),
+      leading: track.coverAsset == null
+          ? _CoverPlaceholder(title: track.title, isPlaying: isPlaying)
+          : _CoverImage(
+              asset: track.coverAsset!,
+              isPlaying: isPlaying,
+              fallbackTitle: track.title,
+            ),
       title: Text(
         track.title,
         maxLines: 1,
@@ -123,6 +129,46 @@ class _TrailingAction extends StatelessWidget {
       );
     }
     return Text(durationLabel);
+  }
+}
+
+/// Pochette embarquée de la piste, avec repli sur le visuel de marque.
+class _CoverImage extends StatelessWidget {
+  const _CoverImage({
+    required this.asset,
+    required this.isPlaying,
+    required this.fallbackTitle,
+  });
+
+  final String asset;
+  final bool isPlaying;
+  final String fallbackTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: isPlaying
+          ? Container(
+              width: 48,
+              height: 48,
+              color: colors.primaryContainer,
+              alignment: Alignment.center,
+              child: Icon(Icons.equalizer, color: colors.onPrimaryContainer),
+            )
+          : Image.asset(
+              asset,
+              width: 48,
+              height: 48,
+              fit: BoxFit.cover,
+              errorBuilder: (BuildContext context, Object error,
+                      StackTrace? stack) =>
+                  _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
+            ),
+    );
   }
 }
 

@@ -1,4 +1,4 @@
-# Artistsaas — application officielle de l'artiste
+# Novaa — application officielle de l'artiste
 
 Application Android (Flutter) permettant de consulter le catalogue musical de
 l'artiste, de l'écouter dans un lecteur intégré et de retrouver les morceaux
@@ -22,12 +22,12 @@ téléchargés hors connexion.
 | Plateforme | Android uniquement (`flutter create --platforms=android`) |
 | `applicationId` | `com.tomker.artistsaas` |
 | `minSdk` / `targetSdk` / `compileSdk` | `24` / `36` / `36` |
-| Nom affiché | `Artistsaas` — **provisoire**, en attente du nom de scène définitif |
+| Nom affiché | `Novaa` (nom de scène retenu pour la démo) — `android:label` et `AppStrings.appTitle` alignés |
 | Contenu | 100 % embarqué : `assets/catalog/catalog.json` + MP3 dans `assets/audio/` |
 | Gestion d'état et injection | `flutter_riverpod` 2.6.1 |
 | Moteur audio | `just_audio` 0.10.6 |
 | Persistance locale | `sqflite` + `path_provider` |
-| Lecture en arrière-plan | **non tranché** (décision attendue avant l'étape 3) |
+| Lecture en arrière-plan | `just_audio_background` + `audio_service` (service natif + notification média + boutons casque/Bluetooth) |
 
 ### Conséquences du contenu embarqué
 

@@ -4,11 +4,10 @@
 /// sont centralisées ici afin de pouvoir introduire une internationalisation
 /// (`flutter_localizations` + fichiers ARB) sans réécrire les écrans.
 abstract final class AppStrings {
-  /// Nom affiché de l'application.
+  /// Nom affiché de l'application — nom de scène fictif retenu pour la démo.
   ///
-  /// Valeur provisoire : à remplacer par le nom de scène définitif avant toute
-  /// publication. `android:label` (AndroidManifest.xml) doit être aligné.
-  static const String appTitle = 'Artistsaas';
+  /// `android:label` (AndroidManifest.xml) doit rester aligné.
+  static const String appTitle = 'Novaa';
 
   // Libellés de la barre d'onglets.
   static const String tabHome = 'Accueil';
@@ -16,7 +15,7 @@ abstract final class AppStrings {
   static const String tabMyMusic = 'Ma musique';
 
   // Titres des écrans.
-  static const String homeTitle = 'Catalogue';
+  static const String homeTitle = 'Musique';
   static const String playerTitle = 'Lecteur';
   static const String myMusicTitle = 'Ma musique';
 
