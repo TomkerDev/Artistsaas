@@ -10,9 +10,10 @@ Future<void> main() async {
   // système dès le démarrage.
   WidgetsFlutterBinding.ensureInitialized();
   await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.tomker.artistsaas.audio',
-    androidNotificationChannelName: 'Lecture audio',
-    androidNotificationOngoing: true,
+    androidNotificationChannelId: 'com.tomker.artistsaas.channel.audio',
+    androidNotificationChannelName: 'Lecture musicale Novaa',
+    androidNotificationOngoing: false,
+    androidStopForegroundOnPause: true,
   );
   // `ProviderScope` héberge le conteneur d'injection de dépendances. Les
   // implémentations concrètes (catalogue, moteur audio, téléchargements) y sont

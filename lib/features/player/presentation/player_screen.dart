@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/duration_formatter.dart';
+import '../../../features/favorites/domain/entities/favorite.dart';
+import '../../../features/favorites/domain/repositories/favorite_repository.dart';
+import '../../../features/favorites/domain/services/favorites_service.dart';
+import '../../../features/favorites/presentation/favorites_provider.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_state.dart';
+import '../domain/entities/loop_mode.dart';
 import 'playback_controller.dart';
 
 /// Écran du lecteur : pochette, progression, contrôles et file de lecture.
@@ -22,7 +28,7 @@ class PlayerScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.playerTitle)),
       body: state.hasCurrent
-          ? _NowPlaying(state: state)
+          ? _NowPlaying(state: state, ref: ref)
           : const _PlayerEmptyView(),
     );
   }
@@ -30,14 +36,17 @@ class PlayerScreen extends ConsumerWidget {
 
 /// Morceau en cours : pochette, titre, progression et contrôles.
 class _NowPlaying extends ConsumerWidget {
-  const _NowPlaying({required this.state});
+  const _NowPlaying({required this.state, required this.ref});
 
   final PlaybackState state;
+  final WidgetRef ref;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final PlaybackMedia media = state.currentMedia!;
+    final bool isFavorite =
+        ref.watch(favoritesProvider).contains(media.trackId);
 
     return Center(
       child: SingleChildScrollView(
@@ -61,6 +70,30 @@ class _NowPlaying extends ConsumerWidget {
             const SizedBox(height: 16),
             _SeekBar(state: state),
             const SizedBox(height: 8),
+            // En-tête sous le titre : Favori à gauche, Partage à droite.
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  _FavoriteButton(
+                    isFavorite: isFavorite,
+                    onToggle: () => _toggleFavorite(media.trackId),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    iconSize: 28,
+                    tooltip: 'Partager ce morceau',
+                    onPressed: () => _shareTrack(context, media),
+                    icon: const Icon(Icons.share_outlined),
+                  ),
+                ],
+              ),
+            ),
+            // Ligne 1 : Modes (Shuffle à gauche, Repeat à droite).
+            _PlaybackModes(state: state),
+            const SizedBox(height: 16),
+            // Ligne 2 : Barre de transport.
             _TransportControls(state: state),
             if (state.hasError) ...<Widget>[
               const SizedBox(height: 12),
@@ -71,6 +104,25 @@ class _NowPlaying extends ConsumerWidget {
       ),
     );
   }
+
+  void _toggleFavorite(String trackId) {
+    final FavoritesService service = ref.read(favoritesServiceProvider);
+    final bool currentlyFavorite =
+        ref.read(favoritesProvider).contains(trackId);
+    if (currentlyFavorite) {
+      service.removeFavorite(trackId);
+    } else {
+      service.addFavorite(trackId);
+    }
+  }
+
+  void _shareTrack(BuildContext context, PlaybackMedia media) {
+    final String text =
+        "Écoute le titre '${media.title}' de ${media.artist} sur l'application officielle Novaa !\n"
+        "https://novaa.app/track/${media.trackId}";
+    Share.share(text, subject: 'Écouter ${media.title} sur Novaa');
+  }
+}
 }
 
 /// Pochette du morceau, ou visuel de remplacement.

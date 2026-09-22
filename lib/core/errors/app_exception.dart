@@ -33,3 +33,8 @@ final class DownloadException extends AppException {
 final class PlaybackException extends AppException {
   const PlaybackException(super.message, {super.cause});
 }
+
+/// Une opération sur les favoris a échoué (stockage inaccessible, etc.).
+final class FavoriteException extends AppException {
+  const FavoriteException(super.message, {super.cause});
+}

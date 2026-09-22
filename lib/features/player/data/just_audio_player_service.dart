@@ -7,6 +7,7 @@ import '../../../core/errors/app_exception.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_source.dart';
 import '../domain/entities/playback_state.dart';
+import '../domain/entities/loop_mode.dart';
 import '../domain/services/audio_player_service.dart';
 
 /// Moteur audio concret fondé sur `just_audio`.
@@ -126,9 +127,7 @@ class JustAudioPlayerService implements AudioPlayerService {
     try {
       await _player.play();
     } on Object catch (error) {
-      _publish(
-        _state.copyWith(errorMessage: 'La lecture a échoué : $error'),
-      );
+      _publish(_state.copyWith(errorMessage: 'La lecture a échoué : $error'));
     }
   }
 
@@ -137,9 +136,7 @@ class JustAudioPlayerService implements AudioPlayerService {
     try {
       await _player.pause();
     } on Object catch (error) {
-      _publish(
-        _state.copyWith(errorMessage: 'La pause a échoué : $error'),
-      );
+      _publish(_state.copyWith(errorMessage: 'La pause a échoué : $error'));
     }
   }
 
@@ -183,6 +180,50 @@ class JustAudioPlayerService implements AudioPlayerService {
   }
 
   @override
+  Future<void> stop() async {
+    try {
+      await _player.stop();
+      // La position repart à zéro et la lecture est suspendue : publié
+      // explicitement car `stop()` ne déclenche pas toujours de flux position.
+      _publish(
+        _state.copyWith(
+          isPlaying: false,
+          isBuffering: false,
+          position: Duration.zero,
+        ),
+      );
+    } on Object catch (error) {
+      _publish(_state.copyWith(errorMessage: "L'arrêt a échoué : $error"));
+    }
+  }
+
+  @override
+  Future<void> setLoopMode(LoopMode mode) async {
+    try {
+      _player.setLoopMode(
+        switch (mode) {
+          LoopMode.off => AudioLoopMode.off,
+          LoopMode.all => AudioLoopMode.all,
+          LoopMode.one => AudioLoopMode.one,
+        },
+      );
+    } on Object catch (error) {
+      _publish(_state.copyWith(errorMessage: 'Mode de boucle impossible : $error'));
+    }
+  }
+
+  @override
+  Future<void> setShuffleModeEnabled(bool enabled) async {
+    try {
+      await _player.setShuffleModeEnabled(enabled);
+    } on Object catch (error) {
+      _publish(
+        _state.copyWith(errorMessage: 'Mode aléatoire impossible : $error'),
+      );
+    }
+  }
+
+  @override
   Future<void> dispose() async {
     if (_disposed) {
       return;
@@ -207,7 +248,7 @@ class JustAudioPlayerService implements AudioPlayerService {
       id: media.trackId,
       title: media.title,
       artist: media.artist,
-      album: 'Artistsaas',
+      album: 'Novaa',
     );
     return switch (media.source) {
       AssetPlaybackSource(:final String assetPath) => AudioSource.asset(

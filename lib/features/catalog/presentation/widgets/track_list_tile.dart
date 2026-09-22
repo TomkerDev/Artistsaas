@@ -164,9 +164,9 @@ class _CoverImage extends StatelessWidget {
               width: 48,
               height: 48,
               fit: BoxFit.cover,
-              errorBuilder: (BuildContext context, Object error,
-                      StackTrace? stack) =>
-                  _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
+              errorBuilder:
+                  (BuildContext context, Object error, StackTrace? stack) =>
+                      _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
             ),
     );
   }

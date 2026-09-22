@@ -1,4 +1,5 @@
 import '../../../../core/utils/collections.dart';
+import 'loop_mode.dart';
 import 'playback_media.dart';
 
 /// Valeur « non fournie » pour les paramètres nullables de `copyWith`.
@@ -18,6 +19,8 @@ class PlaybackState {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.errorMessage,
+    this.loopMode = LoopMode.off,
+    this.shuffleEnabled = false,
   });
 
   /// File de lecture courante.
@@ -48,6 +51,12 @@ class PlaybackState {
   /// Les erreurs du moteur audio sont publiées ici plutôt que levées : le flux
   /// d'état ne doit jamais être interrompu par une erreur d'exécution.
   final String? errorMessage;
+
+  /// Mode de lecture en boucle courant.
+  final LoopMode loopMode;
+
+  /// `true` lorsque le mode aléatoire est activé.
+  final bool shuffleEnabled;
 
   /// `true` si une piste valide est sélectionnée dans la file.
   bool get hasCurrent {
@@ -89,6 +98,8 @@ class PlaybackState {
     Duration? position,
     Duration? duration,
     Object? errorMessage = _unset,
+    LoopMode? loopMode,
+    bool? shuffleEnabled,
   }) {
     return PlaybackState(
       queue: queue ?? this.queue,
@@ -100,6 +111,8 @@ class PlaybackState {
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
+      loopMode: loopMode ?? this.loopMode,
+      shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
     );
   }
 
@@ -112,23 +125,29 @@ class PlaybackState {
         other.isBuffering == isBuffering &&
         other.position == position &&
         other.duration == duration &&
-        other.errorMessage == errorMessage;
+        other.errorMessage == errorMessage &&
+        other.loopMode == loopMode &&
+        other.shuffleEnabled == shuffleEnabled;
   }
 
   @override
   int get hashCode => Object.hash(
-    Object.hashAll(queue),
-    currentIndex,
-    isPlaying,
-    isBuffering,
-    position,
-    duration,
-    errorMessage,
-  );
+        Object.hashAll(queue),
+        currentIndex,
+        isPlaying,
+        isBuffering,
+        position,
+        duration,
+        errorMessage,
+        loopMode,
+        shuffleEnabled,
+      );
 
   @override
   String toString() =>
       'PlaybackState(media: ${currentMedia?.trackId}, '
       'index: $currentIndex, playing: $isPlaying, '
-      'position: ${position.inSeconds}s/${duration.inSeconds}s)';
+      'position: ${position.inSeconds}s/${duration.inSeconds}s, '
+      'loop: $loopMode, shuffle: $shuffleEnabled)';
+}
 }

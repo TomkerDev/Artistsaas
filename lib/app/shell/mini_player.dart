@@ -74,7 +74,7 @@ class MiniPlayer extends ConsumerWidget {
                     icon: const Icon(Icons.close),
                     tooltip: AppStrings.cancelAction,
                     onPressed: () =>
-                        ref.read(playbackControllerProvider.notifier).dismissError(),
+                        ref.read(playbackControllerProvider.notifier).stop(),
                   ),
                 ],
               ),

@@ -42,6 +42,13 @@ abstract final class AppStrings {
   static const String pauseAction = 'Pause';
   static const String previousAction = 'Morceau précédent';
   static const String nextAction = 'Morceau suivant';
+  static const String shuffleOnAction = 'Aléatoire activé';
+  static const String shuffleOffAction = 'Aléatoire désactivé';
+  static const String repeatOffAction = 'Sans répétition';
+  static const String repeatAllAction = 'Répéter la file';
+  static const String repeatOneAction = 'Répéter le morceau';
+  static const String seekBackAction = 'Reculer de 5 secondes';
+  static const String seekForwardAction = 'Avancer de 5 secondes';
 
   // Écran Ma musique.
   static const String myMusicEmptyMessage =
@@ -52,8 +59,7 @@ abstract final class AppStrings {
   // Actions de téléchargement.
   static const String downloadAction = 'Télécharger';
   static const String deleteAction = 'Supprimer';
-  static const String downloadStartedMessage =
-      'Téléchargement en cours…';
+  static const String downloadStartedMessage = 'Téléchargement en cours…';
   static const String downloadCompletedMessage =
       'Morceau disponible hors connexion.';
   static const String deleteConfirmTitle = 'Supprimer ce morceau ?';

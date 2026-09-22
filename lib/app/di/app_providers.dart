@@ -15,12 +15,15 @@ import '../../features/catalog/data/datasources/asset_catalog_data_source.dart';
 import '../../features/catalog/data/repositories/music_repository_impl.dart';
 import '../../features/catalog/domain/datasources/catalog_data_source.dart';
 import '../../features/catalog/domain/repositories/music_repository.dart';
+import '../../features/favorites/data/local_favorite_repository.dart';
+import '../../features/favorites/domain/repositories/favorite_repository.dart';
 import '../../features/library/data/local_download_repository.dart';
 import '../../features/library/domain/repositories/download_repository.dart';
 import '../../features/player/data/default_playback_source_resolver.dart';
 import '../../features/player/data/just_audio_player_service.dart';
 import '../../features/player/domain/services/audio_player_service.dart';
 import '../../features/player/domain/services/playback_source_resolver.dart';
+import '../../features/platform/services/share_service.dart';
 
 /// Source brute du catalogue : fichier JSON embarqué dans les assets.
 final Provider<CatalogDataSource> catalogDataSourceProvider =
@@ -59,3 +62,15 @@ final Provider<PlaybackSourceResolver> playbackSourceResolverProvider =
         ref.watch(downloadRepositoryProvider),
       ),
     );
+
+/// Repository des favoris (base `sqflite`), remplaçable en test.
+final Provider<FavoriteRepository> favoriteRepositoryProvider =
+    Provider<FavoriteRepository>((Ref ref) {
+      final LocalFavoriteRepository repository = LocalFavoriteRepository();
+      ref.onDispose(repository.reset);
+      return repository;
+    });
+
+/// Service de partage native (`share_plus`), remplaçable en test.
+final Provider<ShareService> shareServiceProvider =
+    Provider<ShareService>((Ref ref) => const SharePlusService());

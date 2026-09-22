@@ -124,8 +124,7 @@ final class FakeDownloadRepository implements DownloadRepository {
       StreamController<Map<String, DownloadProgress>>.broadcast();
 
   final Map<String, DownloadedTrack> _stored = <String, DownloadedTrack>{};
-  final Map<String, DownloadProgress> _progress =
-      <String, DownloadProgress>{};
+  final Map<String, DownloadProgress> _progress = <String, DownloadProgress>{};
 
   /// Nombre d'appels à [download], pour vérifier l'idempotence.
   int downloadCount = 0;
@@ -231,6 +230,7 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   /// Nombre de commandes play / pause.
   int playCount = 0;
   int pauseCount = 0;
+  int stopCount = 0;
 
   /// Dernier index demandé à [setQueue].
   int lastInitialIndex = 0;
@@ -307,6 +307,18 @@ final class FakeAudioPlayerService implements AudioPlayerService {
     emit(
       _state.copyWith(
         currentIndex: _state.currentIndex! - 1,
+        position: Duration.zero,
+      ),
+    );
+  }
+
+  @override
+  Future<void> stop() async {
+    stopCount++;
+    emit(
+      _state.copyWith(
+        isPlaying: false,
+        isBuffering: false,
         position: Duration.zero,
       ),
     );

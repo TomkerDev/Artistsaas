@@ -68,7 +68,9 @@ class _HomeShellState extends State<HomeShell> {
           Expanded(
             child: IndexedStack(index: _selectedIndex, children: _screens),
           ),
-          const MiniPlayer(),
+          // Le mini-lecteur est masqué sur l'onglet Lecteur : le lecteur complet
+          // joue déjà ce rôle, un doublon visuel serait redondant.
+          if (_selectedIndex != 1) const MiniPlayer(),
         ],
       ),
       bottomNavigationBar: NavigationBar(

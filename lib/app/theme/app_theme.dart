@@ -36,7 +36,7 @@ abstract final class AppTheme {
       navigationBarTheme: const NavigationBarThemeData(
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       ),
-            progressIndicatorTheme: const ProgressIndicatorThemeData(
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.accent,
       ),
     );
@@ -62,18 +62,9 @@ abstract final class AppTheme {
         letterSpacing: 0.2,
         color: colorScheme.onSurface,
       ),
-      bodyLarge: TextStyle(
-        fontSize: 16,
-        color: colorScheme.onSurface,
-      ),
-      bodyMedium: TextStyle(
-        fontSize: 14,
-        color: colorScheme.onSurface,
-      ),
-      bodySmall: TextStyle(
-        fontSize: 12,
-        color: colorScheme.onSurfaceVariant,
-      ),
+      bodyLarge: TextStyle(fontSize: 16, color: colorScheme.onSurface),
+      bodyMedium: TextStyle(fontSize: 14, color: colorScheme.onSurface),
+      bodySmall: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
       labelSmall: TextStyle(
         fontSize: 11,
         letterSpacing: 0.4,

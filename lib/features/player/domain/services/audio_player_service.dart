@@ -1,5 +1,6 @@
 import '../entities/playback_media.dart';
 import '../entities/playback_state.dart';
+import '../entities/loop_mode.dart';
 
 /// Moteur audio de l'application.
 ///
@@ -38,6 +39,19 @@ abstract interface class AudioPlayerService {
 
   /// Revient à la piste précédente si elle existe.
   Future<void> skipToPrevious();
+
+  /// Arrête la lecture et remet le moteur à l'état d'attente (position à zéro).
+  Future<void> stop();
+
+  /// Modifie le mode de lecture en boucle.
+  ///
+  /// `LoopMode.off` : lecture normale.
+  /// `LoopMode.all` : répéter toute la file.
+  /// `LoopMode.one` : répéter la piste en cours.
+  Future<void> setLoopMode(LoopMode mode);
+
+  /// Active ou désactive le mode de lecture aléatoire.
+  Future<void> setShuffleModeEnabled(bool enabled);
 
   /// Libère les ressources du moteur ; l'instance ne doit plus être utilisée.
   Future<void> dispose();
