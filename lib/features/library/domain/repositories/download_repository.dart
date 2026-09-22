@@ -35,4 +35,10 @@ abstract interface class DownloadRepository {
   /// Utilisé par la résolution des sources de lecture, qui privilégie le fichier
   /// local avant toute autre source.
   Future<String?> getLocalPath(String trackId);
+
+  /// Identifiants des pistes déjà matérialisées localement.
+  ///
+  /// Lecture de l'index (SQLite) : permet de marquer `isDownloaded` sur les
+  /// pistes du catalogue fusionné sans ouvrir un flux d'écoute.
+  Future<Set<String>> getDownloadedTrackIds();
 }

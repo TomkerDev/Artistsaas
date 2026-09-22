@@ -1,0 +1,66 @@
+# Configuration de génération des icônes natives par artiste.
+#
+# Chaque flavor déclaré ici correspond à un flavor Android défini dans
+# `android/app/build.gradle.kts`. La commande :
+#   dart run flutter_launcher_icons
+# génère, pour chaque artiste, les icônes `ic_launcher` (mipmap) et
+# `ic_launcher_foreground` (adaptive icon) dans les dossiers de ressources
+# propres au flavor (`android/app/src/artistX/res/`).
+#
+# Les images sources sont produites par `dart run tool/generate_brand_assets.dart`
+# puis déposées dans `assets/icons/artist_X_icon.png`.
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  min_sdk_android: 24
+  remove_alpha_ios: true
+
+  # Icône par défaut (build sans flavor explicite). Les flavors ci-dessous la
+  # remplacent chacun par l'identité visuelle de leur artiste.
+  image_path: assets/brand/icon.png
+  adaptive_icon_background: "#6C3BF4"
+  adaptive_icon_foreground: assets/brand/icon.png
+
+  # Flavors : une entrée par artiste.
+  flavors:
+    artist1:
+      image_path: assets/icons/artist_1_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_1_icon.png
+    artist2:
+      image_path: assets/icons/artist_2_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_2_icon.png
+    artist3:
+      image_path: assets/icons/artist_3_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_3_icon.png
+    artist4:
+      image_path: assets/icons/artist_4_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_4_icon.png
+    artist5:
+      image_path: assets/icons/artist_5_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_5_icon.png
+    artist6:
+      image_path: assets/icons/artist_6_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_6_icon.png
+    artist7:
+      image_path: assets/icons/artist_7_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_7_icon.png
+    artist8:
+      image_path: assets/icons/artist_8_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_8_icon.png
+    artist9:
+      image_path: assets/icons/artist_9_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_9_icon.png
+    artist10:
+      image_path: assets/icons/artist_10_icon.png
+      adaptive_icon_background: "#6C3BF4"
+      adaptive_icon_foreground: assets/icons/artist_10_icon.png

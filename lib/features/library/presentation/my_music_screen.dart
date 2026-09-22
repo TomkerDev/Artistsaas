@@ -91,7 +91,7 @@ class _DownloadsList extends ConsumerWidget {
   /// « Artiste · taille · date » sur une seule ligne.
   String _subtitle(DownloadedTrack downloaded) {
     final String date = _formatDate(downloaded.downloadedAt);
-    return '${downloaded.track.artist} · '
+    return '${downloaded.track.artistName} · '
         '${ByteFormatter.format(downloaded.fileSizeBytes)} · $date';
   }
 

@@ -7,6 +7,7 @@ import 'package:artistsaas/features/catalog/domain/repositories/music_repository
 import 'package:artistsaas/features/library/domain/entities/download_progress.dart';
 import 'package:artistsaas/features/library/domain/entities/downloaded_track.dart';
 import 'package:artistsaas/features/library/domain/repositories/download_repository.dart';
+import 'package:artistsaas/features/player/domain/entities/loop_mode.dart';
 import 'package:artistsaas/features/player/domain/entities/playback_media.dart';
 import 'package:artistsaas/features/player/domain/entities/playback_source.dart';
 import 'package:artistsaas/features/player/domain/entities/playback_state.dart';
@@ -20,28 +21,32 @@ import 'package:flutter/services.dart';
 Track buildTrack({
   String id = 'track-1',
   String title = 'Titre de test',
-  String artist = 'Artiste de test',
+  String artistName = 'Artiste de test',
   String? album = 'Album de test',
   int? trackNumber,
   int? releaseYear,
   Duration duration = const Duration(seconds: 30),
   String? coverAsset,
   Uri? audioUrl,
-  String? audioAsset,
+  String? audioAssetPath,
   bool isDownloadable = true,
+  bool isNew = false,
+  bool isDownloaded = false,
 }) {
   return Track(
     id: id,
     title: title,
-    artist: artist,
+    artistName: artistName,
     album: album,
     trackNumber: trackNumber,
     releaseYear: releaseYear,
     duration: duration,
     coverAsset: coverAsset,
     audioUrl: audioUrl,
-    audioAsset: audioAsset ?? 'assets/audio/$id.wav',
+    audioAssetPath: audioAssetPath ?? 'assets/audio/$id.wav',
     isDownloadable: isDownloadable,
+    isNew: isNew,
+    isDownloaded: isDownloaded,
   );
 }
 
@@ -182,6 +187,9 @@ final class FakeDownloadRepository implements DownloadRepository {
       _stored[trackId]?.localPath;
 
   @override
+  Future<Set<String>> getDownloadedTrackIds() async => _stored.keys.toSet();
+
+  @override
   Stream<List<DownloadedTrack>> watchDownloadedTracks() async* {
     yield List<DownloadedTrack>.unmodifiable(_stored.values);
     yield* _tracksController.stream;
@@ -210,8 +218,8 @@ final class FakePlaybackSourceResolver implements PlaybackSourceResolver {
     return PlaybackMedia(
       trackId: track.id,
       title: track.title,
-      artist: track.artist,
-      source: AssetPlaybackSource(track.audioAsset),
+      artist: track.artistName,
+      source: AssetPlaybackSource(track.audioAssetPath),
       artAsset: track.coverAsset,
     );
   }
@@ -322,6 +330,16 @@ final class FakeAudioPlayerService implements AudioPlayerService {
         position: Duration.zero,
       ),
     );
+  }
+
+  @override
+  Future<void> setLoopMode(LoopMode mode) async {
+    emit(_state.copyWith(loopMode: mode));
+  }
+
+  @override
+  Future<void> setShuffleModeEnabled(bool enabled) async {
+    emit(_state.copyWith(shuffleEnabled: enabled));
   }
 
   @override

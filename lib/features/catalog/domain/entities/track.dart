@@ -9,23 +9,27 @@ import '../../../../core/errors/app_exception.dart';
 /// où les deux formats divergeront.
 ///
 /// Clés JSON attendues, identiques au futur catalogue distant :
-/// `id`, `title`, `artist`, `duration_ms`, `audio_asset` (obligatoires) ;
-/// `album`, `track_number`, `release_year`, `cover_asset`, `audio_url`,
-/// `is_downloadable` (facultatives, `is_downloadable` valant `true` par défaut).
-/// `audio_url` restera absente pendant toute la phase « contenu embarqué ».
+/// `id`, `title`, `artist`, `duration_ms` (obligatoires) ; l'une au moins de
+/// `audio_asset` (source embarquée) et `audio_url` (source distante) doit être
+/// fournie. `album`, `track_number`, `release_year`, `cover_asset`,
+/// `is_downloadable`, `is_new`, `is_downloaded` sont facultatives
+/// (`is_downloadable` vaut `true` par défaut, `is_new` et `is_downloaded`
+/// valent `false`).
 class Track {
   const Track({
     required this.id,
     required this.title,
-    required this.artist,
+    required this.artistName,
     required this.duration,
-    required this.audioAsset,
+    this.audioAssetPath = '',
     this.album,
     this.trackNumber,
     this.releaseYear,
     this.coverAsset,
     this.audioUrl,
     this.isDownloadable = true,
+    this.isNew = false,
+    this.isDownloaded = false,
   });
 
   /// Construit une piste à partir d'une entrée du catalogue JSON.
@@ -42,18 +46,29 @@ class Track {
       );
     }
 
+    final String audioAssetPath = _optionalText(json, 'audio_asset') ?? '';
+    final Uri? audioUrl = _optionalUri(json, 'audio_url');
+    if (audioAssetPath.isEmpty && audioUrl == null) {
+      throw CatalogException(
+        'Piste « $id » sans source audio : « audio_asset » ou « audio_url » '
+        'est requis.',
+      );
+    }
+
     return Track(
       id: id,
       title: _requireText(json, 'title'),
-      artist: _requireText(json, 'artist'),
+      artistName: _requireText(json, 'artist'),
       duration: Duration(milliseconds: durationMs),
-      audioAsset: _requireText(json, 'audio_asset'),
+      audioAssetPath: audioAssetPath,
       album: _optionalText(json, 'album'),
       trackNumber: _optionalInt(json, 'track_number'),
       releaseYear: _optionalInt(json, 'release_year'),
       coverAsset: _optionalText(json, 'cover_asset'),
-      audioUrl: _optionalUri(json, 'audio_url'),
+      audioUrl: audioUrl,
       isDownloadable: _optionalBool(json, 'is_downloadable') ?? true,
+      isNew: _optionalBool(json, 'is_new') ?? false,
+      isDownloaded: _optionalBool(json, 'is_downloaded') ?? false,
     );
   }
 
@@ -63,14 +78,14 @@ class Track {
   /// Titre du morceau.
   final String title;
 
-  /// Nom de scène de l'artiste.
-  final String artist;
+  /// Nom de scène de l'artiste, tel qu'affiché dans l'application.
+  final String artistName;
 
   /// Durée totale du morceau.
   final Duration duration;
 
   /// Chemin de l'audio embarqué dans le bundle de l'application.
-  final String audioAsset;
+  final String audioAssetPath;
 
   /// Album ou projet de rattachement.
   final String? album;
@@ -90,6 +105,12 @@ class Track {
   /// Indique si l'application autorise la matérialisation locale du morceau.
   final bool isDownloadable;
 
+  /// Marqueur « nouveauté » mis en avant dans l'interface.
+  final bool isNew;
+
+  /// `true` lorsque la piste est déjà disponible hors connexion.
+  final bool isDownloaded;
+
   /// `true` si le catalogue fournit une source distante pour cette piste.
   bool get hasRemoteSource => audioUrl != null;
 
@@ -97,50 +118,89 @@ class Track {
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'title': title,
-    'artist': artist,
+    'artist': artistName,
     'duration_ms': duration.inMilliseconds,
-    'audio_asset': audioAsset,
+    if (audioAssetPath.isNotEmpty) 'audio_asset': audioAssetPath,
     if (album != null) 'album': album,
     if (trackNumber != null) 'track_number': trackNumber,
     if (releaseYear != null) 'release_year': releaseYear,
     if (coverAsset != null) 'cover_asset': coverAsset,
     if (audioUrl != null) 'audio_url': audioUrl.toString(),
     'is_downloadable': isDownloadable,
+    'is_new': isNew,
+    'is_downloaded': isDownloaded,
   };
+
+  /// Copie la piste en modifiant uniquement les champs fournis.
+  Track copyWith({
+    String? id,
+    String? title,
+    String? artistName,
+    Duration? duration,
+    String? audioAssetPath,
+    String? album,
+    int? trackNumber,
+    int? releaseYear,
+    String? coverAsset,
+    Uri? audioUrl,
+    bool? isDownloadable,
+    bool? isNew,
+    bool? isDownloaded,
+  }) {
+    return Track(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      artistName: artistName ?? this.artistName,
+      duration: duration ?? this.duration,
+      audioAssetPath: audioAssetPath ?? this.audioAssetPath,
+      album: album ?? this.album,
+      trackNumber: trackNumber ?? this.trackNumber,
+      releaseYear: releaseYear ?? this.releaseYear,
+      coverAsset: coverAsset ?? this.coverAsset,
+      audioUrl: audioUrl ?? this.audioUrl,
+      isDownloadable: isDownloadable ?? this.isDownloadable,
+      isNew: isNew ?? this.isNew,
+      isDownloaded: isDownloaded ?? this.isDownloaded,
+    );
+  }
 
   @override
   bool operator ==(Object other) {
     return other is Track &&
         other.id == id &&
         other.title == title &&
-        other.artist == artist &&
+        other.artistName == artistName &&
         other.duration == duration &&
-        other.audioAsset == audioAsset &&
+        other.audioAssetPath == audioAssetPath &&
         other.album == album &&
         other.trackNumber == trackNumber &&
         other.releaseYear == releaseYear &&
         other.coverAsset == coverAsset &&
         other.audioUrl == audioUrl &&
-        other.isDownloadable == isDownloadable;
+        other.isDownloadable == isDownloadable &&
+        other.isNew == isNew &&
+        other.isDownloaded == isDownloaded;
   }
 
   @override
   int get hashCode => Object.hash(
     id,
     title,
-    artist,
+    artistName,
     duration,
-    audioAsset,
+    audioAssetPath,
     album,
     trackNumber,
     releaseYear,
     coverAsset,
     audioUrl,
     isDownloadable,
+    isNew,
+    isDownloaded,
   );
 
   @override
-  String toString() => 'Track($id, « $title » par $artist)';
+  String toString() => 'Track($id, « $title » par $artistName)';
 
   static String _requireText(Map<String, dynamic> json, String key) {
     final Object? value = json[key];

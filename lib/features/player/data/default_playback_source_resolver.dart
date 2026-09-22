@@ -29,19 +29,19 @@ class DefaultPlaybackSourceResolver implements PlaybackSourceResolver {
     if (remoteUrl != null) {
       return _media(track, NetworkPlaybackSource(remoteUrl));
     }
-    if (track.audioAsset.isEmpty) {
+    if (track.audioAssetPath.isEmpty) {
       throw PlaybackException(
         'Aucune source audio disponible pour « ${track.title} ».',
       );
     }
-    return _media(track, AssetPlaybackSource(track.audioAsset));
+    return _media(track, AssetPlaybackSource(track.audioAssetPath));
   }
 
   PlaybackMedia _media(Track track, PlaybackSource source) {
     return PlaybackMedia(
       trackId: track.id,
       title: track.title,
-      artist: track.artist,
+      artist: track.artistName,
       source: source,
       artAsset: track.coverAsset,
     );

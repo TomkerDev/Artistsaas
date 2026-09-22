@@ -65,14 +65,14 @@ void main() {
             buildTrack(
               id: 'a',
               title: 'Premier morceau',
-              artist: 'Artiste',
+              artistName: 'Artiste',
               album: 'Album 2026',
               duration: const Duration(seconds: 30),
             ),
             buildTrack(
               id: 'b',
               title: 'Second morceau',
-              artist: 'Artiste',
+              artistName: 'Artiste',
               album: null,
               duration: const Duration(minutes: 1, seconds: 5),
               isDownloadable: false,

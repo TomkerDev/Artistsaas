@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nom par défaut de l'application.
+  Chaque flavor artiste surcharge cette valeur via `resValue("string", "app_name", ...)`
+  déclaré dans android/app/build.gradle.kts.
+-->
+<resources>
+    <string name="app_name">Artistsaas</string>
+</resources>

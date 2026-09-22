@@ -2,24 +2,29 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+import '../../../../app/config/app_config.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../domain/datasources/catalog_data_source.dart';
 import '../../domain/entities/track.dart';
 
-/// Lit le catalogue embarqué dans les assets de l'application.
+/// Lit et décode le catalogue embarqué de l'artiste courant.
 ///
-/// Le `AssetBundle` est injectable : les tests fournissent un bundle en mémoire
-/// au lieu de dépendre du regroupement d'assets produit par la compilation, ce
-/// qui rend la lecture du catalogue testable sans Flutter.
-class AssetCatalogDataSource implements CatalogDataSource {
-  const AssetCatalogDataSource({
+/// Le chemin du fichier est dérivé de [AppConfig] : chaque build distribue le
+/// `catalog.json` de son artiste (`assets/artists/<dossier>/catalog.json`), la
+/// même base de code servant les dix applications.
+///
+/// Le chemin comme le `AssetBundle` restent injectables : les tests fournissent
+/// un bundle en mémoire au lieu de dépendre du regroupement d'assets produit par
+/// la compilation, ce qui rend la lecture testable sans Flutter.
+class LocalCatalogDataSource implements CatalogDataSource {
+  const LocalCatalogDataSource({
     String assetPath = defaultAssetPath,
     AssetBundle? bundle,
   }) : _assetPath = assetPath,
        _bundle = bundle;
 
-  /// Emplacement du catalogue embarqué.
-  static const String defaultAssetPath = 'assets/catalog/catalog.json';
+  /// Chemin du catalogue de l'artiste courant.
+  static const String defaultAssetPath = AppConfig.catalogAssetPath;
 
   final String _assetPath;
   final AssetBundle? _bundle;

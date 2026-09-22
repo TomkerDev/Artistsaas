@@ -42,7 +42,39 @@ void main() {
     _writeImage('assets/covers/$name', 512, _coverPaint(index));
     stdout.writeln('assets/covers/$name');
   }
+
+  // Icônes de lancement par artiste, consommées par flutter_launcher_icons.yaml
+  // (bloc `flavors`). Le motif reste la « nova », la teinte varie par artiste.
+  for (int index = 0; index < _artistCount; index++) {
+    final String path = 'assets/icons/artist_${index + 1}_icon.png';
+    _writeImage(path, 1024, _artistIconPaint(index));
+    stdout.writeln(path);
+  }
+
+  // Métadonnées embarquées par artiste : garantit l'existence (et le contenu)
+  // des dossiers déclarés dans pubspec.yaml pour chaque flavor.
+  for (int index = 0; index < _artistCount; index++) {
+    final int number = index + 1;
+    final String path = 'assets/artists/artist_$number/artist.json';
+    final File file = File(path);
+    file.parent.createSync(recursive: true);
+    file.writeAsStringSync(_artistManifest(number));
+    stdout.writeln(path);
+  }
 }
+
+/// Contenu JSON des métadonnées d'un artiste (numéro 1-based).
+String _artistManifest(int number) {
+  return '{\n'
+      '  "id": "artist$number",\n'
+      '  "name": "Artist $number",\n'
+      '  "applicationId": "com.music.artist$number",\n'
+      '  "icon": "assets/icons/artist_${number}_icon.png"\n'
+      '}\n';
+}
+
+/// Nombre d'artistes exposés (aligné sur les flavors `artist1`..`artistN`).
+const int _artistCount = 10;
 
 // ---------------------------------------------------------------------------
 // Motifs
@@ -72,6 +104,22 @@ int _star(double dx, double dy, int fallback) {
   final double power =
       pow(dx.abs() * 2, 4.0).toDouble() + pow(dy.abs() * 2, 4.0).toDouble();
   return power <= 0.55 ? 0xFFFFFFFF : fallback;
+}
+
+/// Icône de l'artiste [index] (0-based) : nova centrée sur un dégradé dont la
+/// teinte est décalée pour différencier visuellement chaque artiste.
+int Function(double, double) _artistIconPaint(int index) {
+  final double hueShift = index / _artistCount;
+  return (double x, double y) {
+    final int base = _blend(_violet, _cyan, (x + y) / 2 + hueShift);
+    final double dx = x - 0.5;
+    final double dy = y - 0.5;
+    final double distance = sqrt(dx * dx + dy * dy) * 2;
+    if (distance > 0.46) {
+      return _night;
+    }
+    return _star(dx, dy, base);
+  };
 }
 
 /// Pochette numéro [index] : angle du dégradé tournant, forme centrale

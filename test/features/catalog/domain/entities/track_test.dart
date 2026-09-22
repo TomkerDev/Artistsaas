@@ -19,6 +19,8 @@ void main() {
     'cover_asset': 'assets/images/covers/single-001.jpg',
     'audio_url': 'https://exemple.test/single-001.mp3',
     'is_downloadable': false,
+    'is_new': true,
+    'is_downloaded': true,
   };
 
   group('Track.fromJson', () {
@@ -27,15 +29,17 @@ void main() {
 
       expect(track.id, 'single-001');
       expect(track.title, 'Premier titre');
-      expect(track.artist, 'Nom de scène');
+      expect(track.artistName, 'Nom de scène');
       expect(track.duration, const Duration(milliseconds: 213000));
-      expect(track.audioAsset, 'assets/audio/single-001.mp3');
+      expect(track.audioAssetPath, 'assets/audio/single-001.mp3');
       expect(track.album, isNull);
       expect(track.trackNumber, isNull);
       expect(track.releaseYear, isNull);
       expect(track.coverAsset, isNull);
       expect(track.audioUrl, isNull);
       expect(track.isDownloadable, isTrue);
+      expect(track.isNew, isFalse);
+      expect(track.isDownloaded, isFalse);
       expect(track.hasRemoteSource, isFalse);
     });
 
@@ -48,6 +52,8 @@ void main() {
       expect(track.coverAsset, 'assets/images/covers/single-001.jpg');
       expect(track.audioUrl, Uri.parse('https://exemple.test/single-001.mp3'));
       expect(track.isDownloadable, isFalse);
+      expect(track.isNew, isTrue);
+      expect(track.isDownloaded, isTrue);
       expect(track.hasRemoteSource, isTrue);
     });
 
@@ -112,6 +118,8 @@ void main() {
         minimalJson()..['duration_ms'] = '3:33',
         minimalJson()..['track_number'] = 'deux',
         minimalJson()..['is_downloadable'] = 'oui',
+        minimalJson()..['is_new'] = 'oui',
+        minimalJson()..['is_downloaded'] = 'non',
       ];
 
       for (final Map<String, dynamic> json in invalides) {
@@ -141,6 +149,8 @@ void main() {
       expect(json.containsKey('audio_url'), isFalse);
       expect(json['duration_ms'], 213000);
       expect(json['is_downloadable'], isTrue);
+      expect(json['is_new'], isFalse);
+      expect(json['is_downloaded'], isFalse);
     });
   });
 

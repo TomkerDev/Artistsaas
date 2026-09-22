@@ -73,9 +73,9 @@ class TrackListTile extends StatelessWidget {
   String get _subtitle {
     final String? album = track.album;
     if (album == null || album.isEmpty) {
-      return track.artist;
+      return track.artistName;
     }
-    return '${track.artist} · $album';
+    return '${track.artistName} · $album';
   }
 }
 

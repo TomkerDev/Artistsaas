@@ -40,6 +40,64 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // Multi-artistes : chaque artiste est distribué comme une application
+    // distincte (identifiant + nom + icône propres) générée depuis la même
+    // base de code via les flavors.
+    flavorDimensions += "artist"
+
+    productFlavors {
+        create("artist1") {
+            dimension = "artist"
+            applicationId = "com.music.artist1"
+            resValue("string", "app_name", "Artist 1")
+        }
+        create("artist2") {
+            dimension = "artist"
+            applicationId = "com.music.artist2"
+            resValue("string", "app_name", "Artist 2")
+        }
+        create("artist3") {
+            dimension = "artist"
+            applicationId = "com.music.artist3"
+            resValue("string", "app_name", "Artist 3")
+        }
+        create("artist4") {
+            dimension = "artist"
+            applicationId = "com.music.artist4"
+            resValue("string", "app_name", "Artist 4")
+        }
+        create("artist5") {
+            dimension = "artist"
+            applicationId = "com.music.artist5"
+            resValue("string", "app_name", "Artist 5")
+        }
+        create("artist6") {
+            dimension = "artist"
+            applicationId = "com.music.artist6"
+            resValue("string", "app_name", "Artist 6")
+        }
+        create("artist7") {
+            dimension = "artist"
+            applicationId = "com.music.artist7"
+            resValue("string", "app_name", "Artist 7")
+        }
+        create("artist8") {
+            dimension = "artist"
+            applicationId = "com.music.artist8"
+            resValue("string", "app_name", "Artist 8")
+        }
+        create("artist9") {
+            dimension = "artist"
+            applicationId = "com.music.artist9"
+            resValue("string", "app_name", "Artist 9")
+        }
+        create("artist10") {
+            dimension = "artist"
+            applicationId = "com.music.artist10"
+            resValue("string", "app_name", "Artist 10")
+        }
+    }
 }
 
 flutter {

@@ -11,10 +11,13 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/catalog/data/datasources/asset_catalog_data_source.dart';
-import '../../features/catalog/data/repositories/music_repository_impl.dart';
+import '../config/app_config.dart';
+import '../../features/catalog/data/datasources/firebase_catalog_data_source.dart';
+import '../../features/catalog/data/datasources/local_catalog_data_source.dart';
+import '../../features/catalog/data/repositories/track_repository_impl.dart';
 import '../../features/catalog/domain/datasources/catalog_data_source.dart';
-import '../../features/catalog/domain/repositories/music_repository.dart';
+import '../../features/catalog/domain/datasources/remote_catalog_data_source.dart';
+import '../../features/catalog/domain/repositories/track_repository.dart';
 import '../../features/favorites/data/local_favorite_repository.dart';
 import '../../features/favorites/domain/repositories/favorite_repository.dart';
 import '../../features/library/data/local_download_repository.dart';
@@ -25,14 +28,33 @@ import '../../features/player/domain/services/audio_player_service.dart';
 import '../../features/player/domain/services/playback_source_resolver.dart';
 import '../../features/platform/services/share_service.dart';
 
-/// Source brute du catalogue : fichier JSON embarqué dans les assets.
+/// Source brute du catalogue : fichier JSON embarqué de l'artiste courant.
+///
+/// Le chemin dépend du `--dart-define=ARTIST_FOLDER=…` du build (voir
+/// `AppConfig`), ce qui permet à une même base de code de servir les dix
+/// applications distribuées.
 final Provider<CatalogDataSource> catalogDataSourceProvider =
-    Provider<CatalogDataSource>((Ref ref) => const AssetCatalogDataSource());
+    Provider<CatalogDataSource>((Ref ref) => const LocalCatalogDataSource());
 
-/// Accès au catalogue musical, avec mise en cache du contenu embarqué.
-final Provider<MusicRepository> musicRepositoryProvider =
-    Provider<MusicRepository>(
-      (Ref ref) => MusicRepositoryImpl(ref.watch(catalogDataSourceProvider)),
+/// Source distante des nouveautés (collection Firestore `tracks`).
+final Provider<RemoteCatalogDataSource> remoteCatalogDataSourceProvider =
+    Provider<RemoteCatalogDataSource>(
+      (Ref ref) => FirebaseCatalogDataSource(),
+    );
+
+/// Catalogue consolidé : embarqué + nouveautés distantes + état local.
+///
+/// L'ordre des lectures et la fusion sont portés par `TrackRepositoryImpl` ;
+/// les écrans ne voient qu'une liste unique, déjà marquée `isNew` et
+/// `isDownloaded`.
+final Provider<TrackRepository> trackRepositoryProvider =
+    Provider<TrackRepository>(
+      (Ref ref) => TrackRepositoryImpl(
+        local: ref.watch(catalogDataSourceProvider),
+        remote: ref.watch(remoteCatalogDataSourceProvider),
+        downloads: ref.watch(downloadRepositoryProvider),
+        artistId: AppConfig.artistId,
+      ),
     );
 
 /// Index local des morceaux matérialisés (base `sqflite` + stockage privé).

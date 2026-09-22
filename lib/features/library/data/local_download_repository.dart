@@ -116,10 +116,10 @@ class LocalDownloadRepository implements DownloadRepository {
 
     try {
       final Directory directory = await _resolveDirectoryOnce();
-      final String extension = _extensionOf(track.audioAsset);
+      final String extension = _extensionOf(track.audioAssetPath);
       final File target = File('${directory.path}/${track.id}.$extension');
 
-      final ByteData data = await rootBundle.load(track.audioAsset);
+      final ByteData data = await rootBundle.load(track.audioAssetPath);
       final int totalBytes = data.lengthInBytes;
       final Uint8List bytes = data.buffer.asUint8List();
 
@@ -218,6 +218,26 @@ class LocalDownloadRepository implements DownloadRepository {
     } on Object catch (error) {
       throw DownloadException(
         'La suppression de Â« $trackId Â» a Ã©chouÃ©.',
+        cause: error,
+      );
+    }
+  }
+
+  @override
+  Future<Set<String>> getDownloadedTrackIds() async {
+    try {
+      final Database database = await _openDatabaseOnce();
+      final List<Map<String, Object?>> rows = await database.query(
+        'downloaded_tracks',
+        columns: <String>['id'],
+      );
+      return <String>{
+        for (final Map<String, Object?> row in rows)
+          if (row['id'] case final String id) id,
+      };
+    } on Object catch (error) {
+      throw DownloadException(
+        'La lecture de l\'index local a échoué.',
         cause: error,
       );
     }
