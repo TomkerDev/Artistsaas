@@ -97,6 +97,16 @@ android {
             applicationId = "com.music.artist10"
             resValue("string", "app_name", "Artist 10")
         }
+        create("dilson_le_mustang") {
+            dimension = "artist"
+            applicationId = "com.music.dilson_le_mustang"
+            resValue("string", "app_name", "Dilson Le Mustang")
+        }
+        create("jethsonat") {
+            dimension = "artist"
+            applicationId = "com.music.jethsonat"
+            resValue("string", "app_name", "Jethsonat")
+        }
     }
 }
 

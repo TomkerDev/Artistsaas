@@ -51,6 +51,9 @@ dependencies:
   firebase_storage: ^12.4.10
   # Sélection des MP3 et pochettes depuis l'explorateur (web et desktop).
   file_picker: ^10.3.3
+  # Stockage média externe pour le panneau d'administration multi-artistes
+  # (5 Go gratuits, sans carte bancaire) : téléversement MP3 + pochettes.
+  supabase_flutter: ^2.0.0
 
 dev_dependencies:
   flutter_test:

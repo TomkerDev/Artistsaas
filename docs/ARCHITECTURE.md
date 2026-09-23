@@ -8,7 +8,14 @@ lecture intégrée, téléchargement local, écoute hors connexion.
 
 ```
 lib/
-├── main.dart                            # bootstrap : runApp + ProviderScope
+├── main.dart                            # entrée « application artiste » (Android)
+├── main_admin.dart                      # entrée « panneau d'administration » (Flutter Web)
+├── firebase_options.dart                # options Firebase par plateforme (--dart-define)
+├── admin/                               # écrans du panneau d'administration
+│   ├── admin_login_page.dart            # connexion Firebase Auth (e-mail + mot de passe)
+│   └── admin_upload_page.dart           # publication d'un titre (audio + pochette)
+├── services/
+│   └── supabase_storage_service.dart    # client Supabase Storage (bucket `artist-media`)
 ├── app/
 │   ├── artist_app.dart                  # MaterialApp : thème, locale fr, coquille
 │   ├── di/
@@ -26,6 +33,55 @@ lib/
     ├── player/                          # moteur audio et lecture  → écran Lecteur
     └── library/                         # téléchargements          → écran Ma musique
 ```
+
+## Deux points d'entrée
+
+Le dépôt produit deux binaires à partir de la même base de code :
+
+| Fichier | Cible | Rôle |
+| --- | --- | --- |
+| `lib/main.dart` | Android (les 12 flavors) | application artiste : catalogue, lecteur, téléchargements |
+| `lib/main_admin.dart` | Flutter Web (Firebase Hosting) | panneau d'administration : Auth, publication de titres |
+
+Le binaire artiste n'embarque **jamais** les écrans d'administration : la
+séparation est faite au niveau du point d'entrée, pas par un drapeau d'exécution.
+
+## Panneau d'administration (web)
+
+| Élément | Détail |
+| --- | --- |
+| Authentification | Firebase Auth, e-mail + mot de passe (`signInWithEmailAndPassword`) |
+| Médias lourds | Supabase Storage, bucket public `artist-media`, chemin `<artistId>/<fichier>` |
+| Métadonnées | Cloud Firestore, collection `tracks` (titre, album, numéro de piste, année, URLs) |
+| Sélection de fichiers | `file_picker` (MP3 + pochette) |
+| Navigation | routes `MaterialApp` : `/admin/login` et `/admin/upload` |
+
+`lib/services/supabase_storage_service.dart` crée son client **paresseusement**
+au premier téléversement et lit ses paramètres dans des constantes
+`String.fromEnvironment` (voir le piège `const` dans le README). `main_admin.dart`
+n'initialise `Supabase.initialize` que si les deux valeurs sont présentes, afin
+qu'un build sans `--dart-define=SUPABASE_*` démarre quand même et affiche
+l'erreur au moment de l'upload plutôt qu'au lancement.
+
+## Distribution multi-artistes
+
+Une seule base de code produit **une application par artiste** :
+
+- `android/app/build.gradle.kts` déclare `flavorDimensions += "artist"` et douze
+  *product flavors* (`dilson_le_mustang`, `jethsonat`, `artist1`…`artist10`),
+  chacun fixant son `applicationId` (`com.music.<flavor>`) et son nom affiché
+  (`resValue("string", "app_name", …)`) ;
+- `flutter_launcher_icons.yaml` porte le bloc `flavors` et
+  `tool/generate_brand_assets.dart` génère les icônes et visuels de marque ;
+- l'identité embarquée de chaque artiste est un simple
+  `assets/artists/<dossier>/artist.json` (`id`, `name`, `applicationId`, `icon`) ;
+- le catalogue audible est **partagé** (`assets/catalog/catalog.json`) tandis que
+  les titres réellement publiés proviennent de Firestore, filtrés par identifiant
+  d'artiste.
+
+Le nom du flavor n'est **pas** transmis au code Dart : aucune exécution ne lit
+`--dart-define=ARTIST_FOLDER`, l'identité affichée vient du flavor Android et le
+contenu distant de Firestore.
 
 ## Principes
 
@@ -101,13 +157,24 @@ le repository : ils observent les providers.
 
 ## Assets et contenu embarqué
 
-- `assets/catalog/catalog.json` : catalogue du MVP, embarqué dans le bundle.
-- `assets/audio/demo-0*.wav` : fichiers audio de démonstration.
-- `tool/generate_demo_audio.dart` : script de génération des audio de démo
-  (`dart run tool/generate_demo_audio.dart`).
+| Chemin | Contenu |
+| --- | --- |
+| `assets/catalog/catalog.json` | catalogue embarqué (partagé par tous les artistes) |
+| `assets/audio/demo-0*.wav` | audio de démonstration |
+| `assets/covers/cover-0*.png` | pochettes de démonstration |
+| `assets/artists/artist_1…10/artist.json` | identité embarquée de chaque artiste |
+| `assets/brand/` | logo et icône source de la marque |
+| `assets/icons/artist_*_icon.png` | icônes générées par artiste |
 
-Le catalogue est donc **versionné dans le dépôt** : toute modification passe par
-une nouvelle version de l'application (voir les conséquences dans le README).
+Scripts de génération (à relancer uniquement quand les sources changent) :
+
+- `dart run tool/generate_demo_audio.dart` — audio de démonstration ;
+- `dart run tool/generate_brand_assets.dart` — visuels et icônes par flavor.
+
+Le catalogue embarqué est **versionné dans le dépôt** : toute modification passe
+par une nouvelle version de l'application (voir les conséquences dans le README).
+Les titres publiés après coup passent par Firestore et Supabase Storage, donc
+sans nouvelle version de l'application.
 
 ## Tests
 
@@ -119,10 +186,25 @@ La suite (`flutter test`) couvre chaque couche :
 - `test/features/…` : entités, sources de données, repositories, contrôleurs, écrans ;
 - `test/helpers/fakes.dart` : doublures réutilisables des interfaces de `domain/`.
 
+## Dette technique
+
+- `lib/features/admin/` (7 fichiers : `AdminAuthService`, `TrackPublisher`, leurs
+  implémentations Firebase, `admin_login_page.dart`, `admin_upload_page.dart`,
+  `admin_providers.dart`) est **entièrement orphelin** : plus aucun `import` ne
+  le référence depuis que le panneau vit dans `lib/admin/` et `lib/services/`.
+  À supprimer.
+- `lib/admin/admin_routes.dart` (`AdminScreenIds`, `AdminArtistOption`,
+  `allAdminArtists`) n'est importé nulle part : la liste des artistes est
+  dupliquée en dur dans `admin_upload_page.dart`. À supprimer ou à réutiliser.
+- `lib/app/config/app_config.dart` (`AppConfig`) n'est pas utilisé : aucun build
+  ne définit `ARTIST_FOLDER` et `AppConfig.configAssetPath` pointe vers un
+  `assets/artists/<dossier>/config.json` qui n'existe pas (seul `artist.json`
+  subsiste). Sans danger aujourd'hui, mais à retirer ou à brancher.
+
 ## Évolutions prévues
 
-1. Étape 3 : implémentation `just_audio` de `AudioPlayerService` + mini-lecteur,
-   décision sur la lecture en arrière-plan.
-2. Étape 4 : implémentation `DownloadRepository` (copie locale + `sqflite`),
-   `DownloadsController` et branchement de l'écran « Ma musique ».
-3. Étape 5 : intégration, build release (`flutter build appbundle --release`).
+1. Supprimer la dette technique ci-dessus (fichiers orphelins et doublons).
+2. Générer les APK des dix autres flavors (`artist1`…`artist10`).
+3. Mettre en place une vraie signature de release : `android/app/build.gradle.kts`
+   signe encore avec la clé de debug (`signingConfigs.getByName("debug")`).
+4. Publier sur le Play Store (`flutter build appbundle --release`).

@@ -234,7 +234,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       }
       _exiting = true;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const AdminLoginPage()),
+        MaterialPageRoute(builder: (_) => const AdminLoginPage()),
       );
     });
   }

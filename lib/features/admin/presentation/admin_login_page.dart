@@ -116,7 +116,7 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
       if (user != null && !_navigated && mounted) {
         _navigated = true;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(builder: (_) => const AdminUploadPage()),
+          MaterialPageRoute(builder: (_) => const AdminUploadPage()),
         );
       }
     });
