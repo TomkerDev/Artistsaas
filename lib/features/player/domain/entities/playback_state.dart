@@ -150,4 +150,4 @@ class PlaybackState {
       'position: ${position.inSeconds}s/${duration.inSeconds}s, '
       'loop: $loopMode, shuffle: $shuffleEnabled)';
 }
-}
+

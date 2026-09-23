@@ -1,16 +1,16 @@
 import 'dart:convert';
 
 import 'package:artistsaas/core/errors/app_exception.dart';
-import 'package:artistsaas/features/catalog/data/datasources/asset_catalog_data_source.dart';
+import 'package:artistsaas/features/catalog/data/datasources/local_catalog_data_source.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../../../helpers/fakes.dart';
 
 void main() {
-  const String path = AssetCatalogDataSource.defaultAssetPath;
+  const String path = LocalCatalogDataSource.defaultAssetPath;
 
-  AssetCatalogDataSource sourceWith(String content) => AssetCatalogDataSource(
+  LocalCatalogDataSource sourceWith(String content) => LocalCatalogDataSource(
     bundle: InMemoryAssetBundle(<String, String>{path: content}),
   );
 
@@ -26,7 +26,7 @@ void main() {
 
   group('AssetCatalogDataSource', () {
     test('lit les pistes du catalogue embarqué', () async {
-      final AssetCatalogDataSource source = sourceWith(
+      final LocalCatalogDataSource source = sourceWith(
         encode(<Map<String, dynamic>>[rawTrack(), rawTrack(id: 'demo-02')]),
       );
 
@@ -44,7 +44,7 @@ void main() {
 
     test('accepte un chemin d\'asset personnalisé', () async {
       const String customPath = 'assets/catalog/autre.json';
-      final AssetCatalogDataSource source = AssetCatalogDataSource(
+      final LocalCatalogDataSource source = LocalCatalogDataSource(
         assetPath: customPath,
         bundle: InMemoryAssetBundle(<String, String>{
           customPath: encode(<Map<String, dynamic>>[rawTrack()]),
@@ -55,7 +55,7 @@ void main() {
     });
 
     test('échoue lorsque l\'asset est absent', () async {
-      final AssetCatalogDataSource source = AssetCatalogDataSource(
+      final LocalCatalogDataSource source = LocalCatalogDataSource(
         bundle: InMemoryAssetBundle(const <String, String>{}),
       );
 
@@ -84,7 +84,7 @@ void main() {
     });
 
     test('propage l\'erreur d\'une entrée invalide', () async {
-      final AssetCatalogDataSource source = sourceWith(
+      final LocalCatalogDataSource source = sourceWith(
         encode(<Map<String, dynamic>>[
           rawTrack(),
           <String, dynamic>{'id': 'sans-titre'},

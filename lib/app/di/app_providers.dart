@@ -11,7 +11,6 @@ library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../config/app_config.dart';
 import '../../features/catalog/data/datasources/firebase_catalog_data_source.dart';
 import '../../features/catalog/data/datasources/local_catalog_data_source.dart';
 import '../../features/catalog/data/repositories/track_repository_impl.dart';
@@ -20,13 +19,15 @@ import '../../features/catalog/domain/datasources/remote_catalog_data_source.dar
 import '../../features/catalog/domain/repositories/track_repository.dart';
 import '../../features/favorites/data/local_favorite_repository.dart';
 import '../../features/favorites/domain/repositories/favorite_repository.dart';
+import '../../features/favorites/domain/services/favorites_service.dart';
 import '../../features/library/data/local_download_repository.dart';
 import '../../features/library/domain/repositories/download_repository.dart';
+import '../../features/platform/services/share_service.dart';
 import '../../features/player/data/default_playback_source_resolver.dart';
 import '../../features/player/data/just_audio_player_service.dart';
 import '../../features/player/domain/services/audio_player_service.dart';
 import '../../features/player/domain/services/playback_source_resolver.dart';
-import '../../features/platform/services/share_service.dart';
+import '../config/app_config.dart';
 
 /// Source brute du catalogue : fichier JSON embarqué de l'artiste courant.
 ///
@@ -47,7 +48,11 @@ final Provider<RemoteCatalogDataSource> remoteCatalogDataSourceProvider =
 /// L'ordre des lectures et la fusion sont portés par `TrackRepositoryImpl` ;
 /// les écrans ne voient qu'une liste unique, déjà marquée `isNew` et
 /// `isDownloaded`.
-final Provider<TrackRepository> trackRepositoryProvider =
+///
+/// Le nom `musicRepositoryProvider` est conservé (contrat historique des
+/// écrans et des tests) ; le type expose désormais le contrat consolidé
+/// `TrackRepository`.
+final Provider<TrackRepository> musicRepositoryProvider =
     Provider<TrackRepository>(
       (Ref ref) => TrackRepositoryImpl(
         local: ref.watch(catalogDataSourceProvider),
@@ -96,3 +101,9 @@ final Provider<FavoriteRepository> favoriteRepositoryProvider =
 /// Service de partage native (`share_plus`), remplaçable en test.
 final Provider<ShareService> shareServiceProvider =
     Provider<ShareService>((Ref ref) => const SharePlusService());
+
+/// Service métier des favoris, remplaçable en test.
+final Provider<FavoritesService> favoritesServiceProvider =
+    Provider<FavoritesService>(
+      (Ref ref) => LocalFavoritesService(ref.watch(favoriteRepositoryProvider)),
+    );

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:artistsaas/features/catalog/data/datasources/asset_catalog_data_source.dart';
+import 'package:artistsaas/features/catalog/data/datasources/local_catalog_data_source.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// chemin `audio_asset`, une durée déclarée qui ne correspond pas au fichier, ou
 /// un identifiant dupliqué (qui écraserait une entrée du stockage local).
 void main() {
-  const String catalogPath = AssetCatalogDataSource.defaultAssetPath;
+  const String catalogPath = LocalCatalogDataSource.defaultAssetPath;
 
   final List<Track> tracks = <Track>[];
 
@@ -54,9 +54,10 @@ void main() {
   test('chaque piste référence un fichier audio présent', () {
     for (final Track track in tracks) {
       expect(
-        File(track.audioAsset).existsSync(),
+        File(track.audioAssetPath).existsSync(),
         isTrue,
-        reason: '${track.id} référence un fichier absent : ${track.audioAsset}',
+        reason:
+            '${track.id} référence un fichier absent : ${track.audioAssetPath}',
       );
     }
   });
@@ -79,7 +80,7 @@ void main() {
     for (final Track track in tracks) {
       expect(
         track.duration,
-        await _wavDuration(File(track.audioAsset)),
+        await _wavDuration(File(track.audioAssetPath)),
         reason: 'durée déclarée incorrecte pour ${track.id}',
       );
     }

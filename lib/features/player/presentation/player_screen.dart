@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/duration_formatter.dart';
-import '../../../features/favorites/domain/entities/favorite.dart';
-import '../../../features/favorites/domain/repositories/favorite_repository.dart';
-import '../../../features/favorites/domain/services/favorites_service.dart';
-import '../../../features/favorites/presentation/favorites_provider.dart';
+import '../../favorites/domain/services/favorites_service.dart';
+import '../../favorites/presentation/favorites_provider.dart';
+import '../domain/entities/loop_mode.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_state.dart';
-import '../domain/entities/loop_mode.dart';
 import 'playback_controller.dart';
 
 /// Écran du lecteur : pochette, progression, contrôles et file de lecture.
@@ -28,7 +27,7 @@ class PlayerScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text(AppStrings.playerTitle)),
       body: state.hasCurrent
-          ? _NowPlaying(state: state, ref: ref)
+          ? _NowPlaying(state: state)
           : const _PlayerEmptyView(),
     );
   }
@@ -36,17 +35,16 @@ class PlayerScreen extends ConsumerWidget {
 
 /// Morceau en cours : pochette, titre, progression et contrôles.
 class _NowPlaying extends ConsumerWidget {
-  const _NowPlaying({required this.state, required this.ref});
+  const _NowPlaying({required this.state});
 
   final PlaybackState state;
-  final WidgetRef ref;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final PlaybackMedia media = state.currentMedia!;
     final bool isFavorite =
-        ref.watch(favoritesProvider).contains(media.trackId);
+        ref.watch(favoriteIdsProvider).contains(media.trackId);
 
     return Center(
       child: SingleChildScrollView(
@@ -78,7 +76,7 @@ class _NowPlaying extends ConsumerWidget {
                 children: <Widget>[
                   _FavoriteButton(
                     isFavorite: isFavorite,
-                    onToggle: () => _toggleFavorite(media.trackId),
+                    onToggle: () => _toggleFavorite(ref, media.trackId),
                   ),
                   const Spacer(),
                   IconButton(
@@ -105,10 +103,10 @@ class _NowPlaying extends ConsumerWidget {
     );
   }
 
-  void _toggleFavorite(String trackId) {
+  void _toggleFavorite(WidgetRef ref, String trackId) {
     final FavoritesService service = ref.read(favoritesServiceProvider);
     final bool currentlyFavorite =
-        ref.read(favoritesProvider).contains(trackId);
+        ref.read(favoriteIdsProvider).contains(trackId);
     if (currentlyFavorite) {
       service.removeFavorite(trackId);
     } else {
@@ -118,11 +116,81 @@ class _NowPlaying extends ConsumerWidget {
 
   void _shareTrack(BuildContext context, PlaybackMedia media) {
     final String text =
-        "Écoute le titre '${media.title}' de ${media.artist} sur l'application officielle Novaa !\n"
-        "https://novaa.app/track/${media.trackId}";
+        'Écoute le titre \'${media.title}\' de ${media.artist} sur '
+        'l\'application officielle Novaa !\n'
+        'https://novaa.app/track/${media.trackId}';
     Share.share(text, subject: 'Écouter ${media.title} sur Novaa');
   }
 }
+
+/// Bouton de favori du lecteur : cœur vide ou rempli.
+class _FavoriteButton extends StatelessWidget {
+  const _FavoriteButton({required this.isFavorite, required this.onToggle});
+
+  final bool isFavorite;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return IconButton(
+      tooltip: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
+      onPressed: onToggle,
+      icon: Icon(
+        isFavorite ? Icons.favorite : Icons.favorite_border,
+        color: isFavorite ? colors.error : colors.onSurfaceVariant,
+      ),
+    );
+  }
+}
+
+/// Ligne de modes : aléatoire à gauche, boucle à droite.
+class _PlaybackModes extends ConsumerWidget {
+  const _PlaybackModes({required this.state});
+
+  final PlaybackState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final PlaybackController controller = ref.read(
+      playbackControllerProvider.notifier,
+    );
+    final ColorScheme colors = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: <Widget>[
+        IconButton(
+          tooltip: 'Lecture aléatoire',
+          onPressed: () =>
+              controller.setShuffleModeEnabled(!state.shuffleEnabled),
+          icon: Icon(
+            Icons.shuffle,
+            color: state.shuffleEnabled ? colors.primary : null,
+          ),
+        ),
+        IconButton(
+          tooltip: 'Mode de lecture en boucle',
+          onPressed: () => controller.setLoopMode(_nextLoopMode(state.loopMode)),
+          icon: Icon(
+            switch (state.loopMode) {
+              LoopMode.off => Icons.repeat,
+              LoopMode.all => Icons.repeat,
+              LoopMode.one => Icons.repeat_one,
+            },
+            color: state.loopMode == LoopMode.off ? null : colors.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Cycle du mode de boucle : off → toute la file → piste courante → off.
+  static LoopMode _nextLoopMode(LoopMode mode) => switch (mode) {
+        LoopMode.off => LoopMode.all,
+        LoopMode.all => LoopMode.one,
+        LoopMode.one => LoopMode.off,
+      };
 }
 
 /// Pochette du morceau, ou visuel de remplacement.
@@ -181,7 +249,7 @@ class _FallbackCover extends StatelessWidget {
   }
 }
 
-// MARKER_COVER_METHOD
+// MARKER_COVER_METHOD (réserve d'extension : pochette distante/fichier)
 
 /// Barre de progression : position courante, curseur et durée totale.
 class _SeekBar extends ConsumerWidget {

@@ -5,9 +5,9 @@ import '../domain/entities/track.dart';
 
 /// État du catalogue musical affiché par l'écran d'accueil.
 ///
-/// Le contrôleur ne connaît que l'interface `MusicRepository` : il ignore tout du
-/// fichier embarqué, du bundle d'assets et de la mise en cache, qui appartiennent
-/// à `data/`.
+/// Le contrôleur ne connaît que l'interface `TrackRepository` (exposé par le
+/// provider historique `musicRepositoryProvider`) : il ignore tout de la fusion
+/// embarqué + nouveautés distantes + état local, qui appartient à `data/`.
 final class CatalogController extends AsyncNotifier<List<Track>> {
   @override
   Future<List<Track>> build() {

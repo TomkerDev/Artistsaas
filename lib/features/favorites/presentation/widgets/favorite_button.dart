@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../favorites/presentation/favorites_provider.dart';
+import '../../domain/entities/favorite.dart';
+import '../favorites_provider.dart';
 
 /// Bouton de favori : cœur vide ou rempli selon l'état.
 ///
@@ -30,7 +31,7 @@ class FavoriteButton extends ConsumerWidget {
           data: (List<Favorite> favorites) => favorites
               .any((Favorite f) => f.trackId == trackId),
           loading: () => false,
-          error: (_, __) => false,
+          error: (_, _) => false,
         );
 
     return IconButton(

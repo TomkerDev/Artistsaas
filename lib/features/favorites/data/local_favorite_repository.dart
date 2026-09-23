@@ -1,8 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../../../../core/errors/app_exception.dart';
-import '../../domain/entities/favorite.dart';
-import '../../domain/repositories/favorite_repository.dart';
+import '../../../core/errors/app_exception.dart';
+import '../domain/entities/favorite.dart';
+import '../domain/repositories/favorite_repository.dart';
 
 /// Persistance des favoris dans une base `sqflite`.
 ///
@@ -117,7 +117,7 @@ class LocalFavoriteRepository implements FavoriteRepository {
     try {
       final Database db = await _openDatabaseOnce();
       await db.delete('favorites');
-    } on Object catch (error) {
+    } on Object {
       // En test, on accepte l'échec silencieux si la base n'existe pas.
     }
   }

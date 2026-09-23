@@ -1,13 +1,13 @@
 import 'dart:async';
 
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' as ja;
 import 'package:just_audio_background/just_audio_background.dart';
 
 import '../../../core/errors/app_exception.dart';
+import '../domain/entities/loop_mode.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_source.dart';
 import '../domain/entities/playback_state.dart';
-import '../domain/entities/loop_mode.dart';
 import '../domain/services/audio_player_service.dart';
 
 /// Moteur audio concret fondé sur `just_audio`.
@@ -27,7 +27,7 @@ import '../domain/services/audio_player_service.dart';
 /// contrôles casque / écran verrouillé. Le plugin exige un tag sur **toutes**
 /// les sources de la file, sans quoi la lecture lève une erreur sur mobile.
 class JustAudioPlayerService implements AudioPlayerService {
-  final AudioPlayer _player = AudioPlayer();
+  final ja.AudioPlayer _player = ja.AudioPlayer();
 
   final StreamController<PlaybackState> _states =
       StreamController<PlaybackState>.broadcast();
@@ -41,13 +41,13 @@ class JustAudioPlayerService implements AudioPlayerService {
 
   JustAudioPlayerService() {
     _subscriptions.addAll(<StreamSubscription<Object?>>[
-      _player.playerStateStream.listen((PlayerState playerState) {
+      _player.playerStateStream.listen((ja.PlayerState playerState) {
         _publish(
           _state.copyWith(
             isPlaying: playerState.playing,
             isBuffering:
-                playerState.processingState == ProcessingState.loading ||
-                playerState.processingState == ProcessingState.buffering,
+                playerState.processingState == ja.ProcessingState.loading ||
+                playerState.processingState == ja.ProcessingState.buffering,
           ),
         );
       }),
@@ -88,7 +88,7 @@ class JustAudioPlayerService implements AudioPlayerService {
       );
     }
 
-    final List<AudioSource> sources = <AudioSource>[
+    final List<ja.AudioSource> sources = <ja.AudioSource>[
       for (final PlaybackMedia media in queue) _audioSourceOf(media),
     ];
 
@@ -200,11 +200,11 @@ class JustAudioPlayerService implements AudioPlayerService {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     try {
-      _player.setLoopMode(
+      await _player.setLoopMode(
         switch (mode) {
-          LoopMode.off => AudioLoopMode.off,
-          LoopMode.all => AudioLoopMode.all,
-          LoopMode.one => AudioLoopMode.one,
+          LoopMode.off => ja.LoopMode.off,
+          LoopMode.all => ja.LoopMode.all,
+          LoopMode.one => ja.LoopMode.one,
         },
       );
     } on Object catch (error) {
@@ -243,7 +243,7 @@ class JustAudioPlayerService implements AudioPlayerService {
   /// transmise à la notification pour le MVP (les pochettes du catalogue sont
   /// des assets Flutter, sans URI accessible au service natif) ; l'ajout se
   /// fera via `artUri` lorsque des pochettes fichier/distantes seront fournies.
-  AudioSource _audioSourceOf(PlaybackMedia media) {
+  ja.AudioSource _audioSourceOf(PlaybackMedia media) {
     final MediaItem tag = MediaItem(
       id: media.trackId,
       title: media.title,
@@ -251,15 +251,15 @@ class JustAudioPlayerService implements AudioPlayerService {
       album: 'Novaa',
     );
     return switch (media.source) {
-      AssetPlaybackSource(:final String assetPath) => AudioSource.asset(
+      AssetPlaybackSource(:final String assetPath) => ja.AudioSource.asset(
         assetPath,
         tag: tag,
       ),
-      FilePlaybackSource(:final String filePath) => AudioSource.file(
+      FilePlaybackSource(:final String filePath) => ja.AudioSource.file(
         filePath,
         tag: tag,
       ),
-      NetworkPlaybackSource(:final Uri uri) => AudioSource.uri(uri, tag: tag),
+      NetworkPlaybackSource(:final Uri uri) => ja.AudioSource.uri(uri, tag: tag),
     };
   }
 

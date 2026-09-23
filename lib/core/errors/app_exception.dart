@@ -38,3 +38,9 @@ final class PlaybackException extends AppException {
 final class FavoriteException extends AppException {
   const FavoriteException(super.message, {super.cause});
 }
+
+/// L'authentification ou la publication côté panneau d'administration a échoué
+/// (identifiants refusés, compte non administrateur, téléversement interrompu).
+final class AdminException extends AppException {
+  const AdminException(super.message, {super.cause});
+}

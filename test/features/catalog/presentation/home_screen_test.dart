@@ -5,6 +5,7 @@ import 'package:artistsaas/core/constants/app_strings.dart';
 import 'package:artistsaas/core/errors/app_exception.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/music_repository.dart';
+import 'package:artistsaas/features/catalog/domain/repositories/track_repository.dart';
 import 'package:artistsaas/features/catalog/presentation/home_screen.dart';
 import 'package:artistsaas/features/catalog/presentation/widgets/track_list_tile.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +16,7 @@ import '../../../helpers/fakes.dart';
 
 /// Dépôt dont la lecture ne se termine jamais : indispensable pour observer
 /// l'état de chargement de façon déterministe.
-final class _PendingMusicRepository implements MusicRepository {
+final class _PendingMusicRepository implements MusicRepository, TrackRepository {
   @override
   Future<List<Track>> getTracks() => Completer<List<Track>>().future;
 }
@@ -24,7 +25,7 @@ void main() {
   FakeDownloadRepository? downloadRepository;
   FakeAudioPlayerService? audioPlayerService;
 
-  List<Override> overrides(MusicRepository repository) => <Override>[
+  List<Override> overrides(TrackRepository repository) => <Override>[
     musicRepositoryProvider.overrideWithValue(repository),
     downloadRepositoryProvider.overrideWithValue(
       downloadRepository ??= FakeDownloadRepository(),
@@ -37,7 +38,7 @@ void main() {
     ),
   ];
 
-  Future<void> pumpHome(WidgetTester tester, MusicRepository repository) {
+  Future<void> pumpHome(WidgetTester tester, TrackRepository repository) {
     return tester.pumpWidget(
       ProviderScope(
         overrides: overrides(repository),

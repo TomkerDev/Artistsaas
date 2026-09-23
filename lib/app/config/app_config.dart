@@ -28,7 +28,12 @@ abstract final class AppConfig {
   static const String artistAssetsRoot = 'assets/artists/$artistFolder';
 
   /// Catalogue musical de l'artiste courant.
-  static const String catalogAssetPath = '$artistAssetsRoot/catalog.json';
+  ///
+  /// À ce jour, le catalogue est **partagé** entre les dix applications
+  /// (`assets/catalog/catalog.json`) ; les dossiers d'artiste ne portent que
+  /// l'identité (`artist.json`). Le chemin reste centralisé ici pour qu'un
+  /// catalogue par artiste ne soit qu'un changement local.
+  static const String catalogAssetPath = 'assets/catalog/catalog.json';
 
   /// Configuration de l'artiste courant (identité, thème, réglages).
   static const String configAssetPath = '$artistAssetsRoot/config.json';

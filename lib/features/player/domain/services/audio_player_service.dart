@@ -1,6 +1,6 @@
+import '../entities/loop_mode.dart';
 import '../entities/playback_media.dart';
 import '../entities/playback_state.dart';
-import '../entities/loop_mode.dart';
 
 /// Moteur audio de l'application.
 ///

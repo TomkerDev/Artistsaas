@@ -1,8 +1,6 @@
-import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../../../core/constants/app_strings.dart';
-import '../domain/entities/playback_media.dart';
+import '../../player/domain/entities/playback_media.dart';
 
 /// Interface du service de partage, injectable.
 ///
@@ -10,7 +8,7 @@ import '../domain/entities/playback_media.dart';
 /// le test sans dépendance native.
 abstract interface class ShareService {
   /// Partage un message d'invitation pour le [media] donné.
-  Future< void> shareTrack(PlaybackMedia media);
+  Future<void> shareTrack(PlaybackMedia media);
 
   /// Partage un message avec le [title] et [artist] pour une piste via le
   /// mécanisme natif de partage.

@@ -1,12 +1,26 @@
-import '../../../../core/errors/app_exception.dart';
-import '../../domain/entities/favorite.dart';
-import '../../domain/repositories/favorite_repository.dart';
+import '../entities/favorite.dart';
+import '../repositories/favorite_repository.dart';
 
 /// Service métier des favoris.
 ///
 /// Une abstraction par-dessus le repository pour ajouter d'éventuelles règles
-/// métier (validation, événements, etc.). Pour le MVP, elle délégue directement
+/// métier (validation, événements, etc.). Pour le MVP, elle délègue directement
 /// au repository.
+abstract interface class FavoritesService {
+  /// Renvoie la liste des favoris, dans l'ordre d'ajout.
+  Future<List<Favorite>> getFavorites();
+
+  /// Ajoute une piste aux favoris.
+  Future<void> addFavorite(String trackId);
+
+  /// Retire une piste des favoris.
+  Future<void> removeFavorite(String trackId);
+
+  /// `true` si la piste est actuellement favorie.
+  Future<bool> isFavorite(String trackId);
+}
+
+/// Implémentation concrète déléguant au repository `sqflite`.
 class LocalFavoritesService implements FavoritesService {
   const LocalFavoritesService(this._repository);
 

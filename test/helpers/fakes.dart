@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:artistsaas/features/catalog/domain/datasources/catalog_data_source.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/music_repository.dart';
+import 'package:artistsaas/features/catalog/domain/repositories/track_repository.dart';
 import 'package:artistsaas/features/library/domain/entities/download_progress.dart';
 import 'package:artistsaas/features/library/domain/entities/downloaded_track.dart';
 import 'package:artistsaas/features/library/domain/repositories/download_repository.dart';
@@ -77,7 +78,11 @@ final class FakeCatalogDataSource implements CatalogDataSource {
 }
 
 /// Dépôt de catalogue factice, utilisé par les tests de contrôleur et d'écran.
-final class FakeMusicRepository implements MusicRepository {
+///
+/// Implémente les deux contrats (`MusicRepository` historique et
+/// `TrackRepository` consolidé) : leurs signatures sont identiques, le test
+/// peut donc surcharger l'un ou l'autre provider sans changement.
+final class FakeMusicRepository implements MusicRepository, TrackRepository {
   FakeMusicRepository({List<Track>? tracks, this.failure})
     : tracks = tracks ?? const <Track>[];
 

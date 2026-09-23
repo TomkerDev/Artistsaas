@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/di/app_providers.dart';
-import '../../../catalog/domain/entities/track.dart';
+import '../../catalog/domain/entities/track.dart';
+import '../domain/entities/loop_mode.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_state.dart';
-import '../domain/entities/loop_mode.dart';
 import '../domain/services/audio_player_service.dart';
 import '../domain/services/playback_source_resolver.dart';
 
@@ -145,9 +145,10 @@ class PlaybackController extends Notifier<PlaybackState> {
       }
     });
   }
+}
 
 /// État de lecture observé par le lecteur, le mini-lecteur et le catalogue.
 final NotifierProvider<PlaybackController, PlaybackState>
-    playbackControllerProvider =
+playbackControllerProvider =
     NotifierProvider<PlaybackController, PlaybackState>(PlaybackController.new);
-}
+
