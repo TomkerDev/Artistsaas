@@ -558,6 +558,15 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     );
   }
 
+  /// Section KPI — affiche 4 cartes de statistiques en temps réel.
+  ///
+  /// Écoute la collection Firestore `tracks` via un [StreamBuilder] :
+  /// - Si le rôle est `agency_admin` et `assignedArtistId == 'all'`,
+  ///   la requête couvre tous les morceaux de tous les artistes.
+  /// - Sinon, la requête est filtrée par `artistId == _selectedArtistId`.
+  ///
+  /// Pendant le chargement initial du rôle utilisateur ou du premier
+  /// snapshot Firestore, un squelette de chargement est affiché.
   Widget _buildKpiSection(ColorScheme colors) {
     if (_loadingRole) {
       return _kpiLoadingSkeleton(colors);
@@ -599,6 +608,16 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     );
   }
 
+  /// Calcule les indicateurs clés à partir d'une liste de documents `tracks`.
+  ///
+  /// - [totalTracks] : nombre total de documents.
+  /// - [totalAlbums] : nombre d'albums/singles distincts (les chaînes vides
+  ///   sont comptées comme `'Single'`).
+  /// - [totalArtists] : nombre d'artistes distincts, ou `-1` si l'utilisateur
+  ///   n'est pas admin agence global (auquel cas la carte affiche le nom de
+  ///   l'artiste au lieu d'un total).
+  /// - [lastTrackTitle] / [lastTrackDate] : titre et date du morceau dont
+  ///   le champ `createdAt` est le plus récent.
   _KpiData _computeKpis(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     bool isFullAdmin,
@@ -648,6 +667,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     );
   }
 
+  /// Squelette de chargement affiché pendant l'attente du premier snapshot
+  /// Firestore ou pendant le chargement du rôle utilisateur.
+  /// Affiche 4 conteneurs rectangles gris clair avec un indicateur
+  /// circulaire centré, correspondant à la disposition des 4 cartes KPI.
   Widget _kpiLoadingSkeleton(ColorScheme colors) {
     return SizedBox(
       height: 120,
@@ -1084,6 +1107,10 @@ class _ErrorBanner extends StatelessWidget {
 
 // ===== KPI WIDGETS =====
 
+/// Données calculées pour la section KPI.
+///
+/// `totalArtists` vaut `-1` quand l'utilisateur n'est pas un admin agence
+/// global — la carte affichera alors le [artistName] au lieu d'un total.
 class _KpiData {
   const _KpiData({
     required this.totalTracks,
@@ -1102,6 +1129,7 @@ class _KpiData {
   final String? lastTrackDate;
 }
 
+/// Paramètres d'affichage pour une carte KPI individuelle.
 class _StatCardData {
   const _StatCardData({
     required this.title,
@@ -1118,6 +1146,10 @@ class _StatCardData {
   final Color color;
 }
 
+/// Grille responsive de 4 cartes KPI.
+///
+/// Utilise [LayoutBuilder] + [Wrap] pour passer automatiquement d'une rangée
+/// de 4 cartes (web/PC, largeur > 600 px) à une grille 2×2 (mobile).
 class _KpiGrid extends StatelessWidget {
   const _KpiGrid({required this.kpiData, required this.colors});
 
@@ -1188,6 +1220,11 @@ class _KpiGrid extends StatelessWidget {
   }
 }
 
+/// Carte visuelle d'un indicateur KPI.
+///
+/// Fond sombre ([ColorScheme.surface]), bordure fine ([ColorScheme.outline]),
+/// ombre légère (`elevation: 2`). Contient une icône colorée, un titre court
+/// et une valeur principale. Un [subtitle] optionnel peut compléter la valeur.
 class _StatCard extends StatelessWidget {
   const _StatCard({
     required this.title,
