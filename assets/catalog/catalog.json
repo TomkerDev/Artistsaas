@@ -70,5 +70,42 @@
     "audio_asset": "assets/audio/demo-06.wav",
     "cover_asset": "assets/covers/cover-06.png",
     "is_downloadable": true
+  },
+  {
+    "id": "dilson-01",
+    "title": "Premier soleil",
+    "artist": "Dilson Le Mustang",
+    "album": "Dilson Le Mustang",
+    "track_number": 1,
+    "release_year": 2026,
+    "duration_ms": 240000,
+    "audio_asset": "assets/audio/dilson_track_1.m4a",
+    "cover_asset": "assets/covers/dilson_cover.png",
+    "is_downloadable": true
+  },
+  {
+    "id": "dilson-02",
+    "title": "Route ouverte",
+    "artist": "Dilson Le Mustang",
+    "album": "Dilson Le Mustang",
+    "track_number": 2,
+    "release_year": 2026,
+    "duration_ms": 320000,
+    "audio_asset": "assets/audio/dilson_track_2.m4a",
+    "cover_asset": "assets/covers/dilson_cover.png",
+    "is_downloadable": true
+  },
+  {
+    "id": "dilson-03",
+    "title": "Horizon lointain",
+    "artist": "Dilson Le Mustang",
+    "album": "Dilson Le Mustang",
+    "track_number": 3,
+    "release_year": 2026,
+    "duration_ms": 300000,
+    "audio_asset": "assets/audio/dilson_track_3.m4a",
+    "cover_asset": "assets/covers/dilson_cover.png",
+    "is_downloadable": true
   }
 ]
+
