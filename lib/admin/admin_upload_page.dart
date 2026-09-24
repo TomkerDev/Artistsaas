@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../services/supabase_storage_service.dart';
@@ -195,11 +195,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     });
 
     final String title = _title.text.trim();
-    final String album = _album.text.trim();
+    final String album =
+        _album.text.trim().isEmpty ? 'Single' : _album.text.trim();
     final String trackId =
-        title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_') +
-        '_' +
-        DateTime.now().millisecondsSinceEpoch.toString();
+        '${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}_${DateTime.now().millisecondsSinceEpoch}';
 
     String audioPublicUrl = '';
     String? imagePublicUrl;
@@ -301,10 +300,14 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       if (snapshot.docs.isEmpty) return;
       await snapshot.docs.first.reference.delete();
       if (mounted) {
+        final ScaffoldMessengerState messenger =
+            ScaffoldMessenger.of(context);
         await _listenToTracks();
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Morceau supprimé.')));
+        if (mounted) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Morceau supprimé.')),
+          );
+        }
       }
     } catch (error) {
       if (mounted) {
@@ -360,10 +363,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         actions: [
           TextButton.icon(
             onPressed: () async {
+              final NavigatorState navigator = Navigator.of(context);
               await FirebaseAuth.instance.signOut();
-              if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/admin/login');
-              }
+              if (!mounted) return;
+              await navigator.pushReplacementNamed('/admin/login');
             },
             icon: const Icon(Icons.logout, color: Colors.white70),
             label: const Text(
@@ -822,7 +825,7 @@ class _TrackList extends StatelessWidget {
         final track = tracks[index];
         final String title = track['title'] as String? ?? 'Sans titre';
         final String? album = track['album'] as String?;
-        final String? imageUrl = track['imageUrl'] as String?;
+        final String? imageUrl = track['cover_url'] as String?;
         final Timestamp? createdAt = track['createdAt'] as Timestamp?;
 
         return Container(
@@ -843,7 +846,7 @@ class _TrackList extends StatelessWidget {
                     width: 56,
                     height: 56,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildPlaceholder(colors),
+                    errorBuilder: (_, _, _) => _buildPlaceholder(colors),
                   ),
                 )
               else
@@ -950,3 +953,4 @@ class _ErrorBanner extends StatelessWidget {
     );
   }
 }
+
