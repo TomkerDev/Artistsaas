@@ -63,6 +63,34 @@ n'initialise `Supabase.initialize` que si les deux valeurs sont présentes, afin
 qu'un build sans `--dart-define=SUPABASE_*` démarre quand même et affiche
 l'erreur au moment de l'upload plutôt qu'au lancement.
 
+### Section KPI — indicateurs clés de performance
+
+Le panneau affiche une grille de **4 cartes KPI** en temps réel en haut de
+`admin_upload_page.dart` :
+
+| Carte | Source | Description |
+| --- | --- | --- |
+| Titres en ligne | `tracks` | Nombre total de morceaux publiés |
+| Albums & Singles | `tracks.album` | Nombre d'albums/singles distincts |
+| Artiste / Total Artistes | `tracks.artistId` | Nom de l'artiste (rôle `artist`) ou total d'artistes (rôle `agency_admin` global) |
+| Dernier Ajout | `tracks.createdAt` | Titre + date du dernier morceau ajouté |
+
+**Filtrage par rôle** :
+
+- `agency_admin` + `assignedArtistId == 'all'` : écoute sur la collection
+  `tracks` complète (tous les artistes) ;
+- `artist` ou `agency_admin` avec artiste spécifique : écoute filtrée par
+  `where('artistId', isEqualTo: _selectedArtistId)`.
+
+> Le `StreamBuilder` se reconnecte automatiquement quand `_selectedArtistId`
+> change (changement d'artiste dans le dropdown), ce qui rafraîchit les
+> cartes KPI sans recharger la page.
+
+**Responsive** : la grille utilise `LayoutBuilder` + `Wrap` pour afficher 4
+colonnes sur web/PC et une grille 2×2 sur mobile. Un squelette de chargement
+(`_kpiLoadingSkeleton` avec `CircularProgressIndicator`) est affiché pendant
+l'attente du premier snapshot Firestore ou pendant le chargement du rôle.
+
 ## Distribution multi-artistes
 
 Une seule base de code produit **une application par artiste** :

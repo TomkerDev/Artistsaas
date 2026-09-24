@@ -152,6 +152,22 @@ servis en `no-cache` : `/`, `/index.html`, `/main.dart.js`,
 À noter : Hosting applique les règles d'en-tête sur **l'URL demandée, avant les
 rewrites** — d'où la règle explicite sur `/` en plus de `/index.html`.
 
+#### Indicateurs clés de performance (KPI)
+
+Le panneau affiche **4 cartes KPI** en temps réel en haut de la page
+d'upload (`admin_upload_page.dart`) :
+
+- **Titres en ligne** — nombre total de morceaux publiés (Firestore `tracks`)
+- **Albums & Singles** — nombre d'albums/singles distincts
+- **Artiste / Total Artistes** — nom de l'artiste (rôle `artist`) ou
+  total d'artistes (rôle `agency_admin` global)
+- **Dernier Ajout** — titre + date du morceau le plus récemment publié
+
+Les données sont écoutées via un `StreamBuilder` sur la collection `tracks` :
+filtrée par `artistId` si le rôle est `artist`, ou complète si le rôle est
+`agency_admin` avec `assignedArtistId == 'all'`. Un squelette de chargement
+apparaît pendant l'attente du premier snapshot.
+
 ### Applications artistes (Android)
 
 Une application par artiste : même base de code, identité choisie par le flavor
