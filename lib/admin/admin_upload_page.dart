@@ -203,6 +203,17 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       setState(() => _errorMessage = 'Sélectionnez un fichier MP3.');
       return;
     }
+    // Rejeter les fichiers audio qui ne sont pas des MP3 (redondant avec
+    // allowedExtensions du picker, mais protection côté logique).
+    final String audioExt = _audioFileName?.split('.').last.toLowerCase() ?? '';
+    if (audioExt != 'mp3') {
+      setState(
+        () => _errorMessage =
+            'Format audio non supporté : '
+            'uniquement les fichiers .mp3 sont acceptés.',
+      );
+      return;
+    }
     setState(() {
       _publishing = true;
       _progress = 0;
@@ -218,6 +229,17 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
     String audioPublicUrl = '';
     String? imagePublicUrl;
+
+    // Valider la configuration Supabase avant le premier upload.
+    try {
+      SupabaseStorageService.ensureInitialized();
+    } on StateError catch (initError) {
+      if (mounted) {
+        setState(() => _errorMessage = initError.message);
+      }
+      if (mounted) setState(() => _publishing = false);
+      return;
+    }
 
     try {
       // Étape A : MP3 sur Supabase Storage
@@ -268,9 +290,19 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         );
       }
     } catch (error) {
+      String message = error.toString();
+      // Le message d'erreur Supabase Storage (StateError) contient déjà une
+      // explication détaillée (causes possibles, code 403, …) grâce à
+      // [SupabaseStorageService._wrapStorageError].
       if (mounted) {
-        setState(
-          () => _errorMessage = 'Erreur lors de la publication : $error',
+        setState(() => _errorMessage = message);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red.shade700,
+          ),
         );
       }
     } finally {

@@ -1,0 +1,132 @@
+﻿name: "CI / CD — Admin Web (Firebase Hosting)"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  analyze-and-test:
+    name: Analyze & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.27.x'
+          dart-version: '3.7.x'
+          cache: true
+          cache-key: ${{ runner.os }}-flutter-stable-${{ hashFiles('pubspec.yaml') }}
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test --reporter=expanded
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-cache
+          path: build/
+          retention-days: 1
+
+  build-and-deploy:
+    name: Build & Deploy
+    needs: analyze-and-test
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT_ID: novaa-music-tchaddd
+      FIREBASE_AUTH_DOMAIN: novaa-music-tchaddd.firebaseapp.com
+      FIREBASE_STORAGE_BUCKET: novaa-music-tchaddd.firebasestorage.app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.27.x'
+          dart-version: '3.7.x'
+          cache: true
+          cache-key: ${{ runner.os }}-build-${{ hashFiles('pubspec.yaml', 'pubspec.lock') }}
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Cache Flutter build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.HOME }}/.pub-cache
+            ${{ env.HOME }}/.dart
+            ${{ runner.workspace }}/Artistsaas/build/web
+          key: ${{ runner.os }}-web-build-${{ hashFiles('pubspec.yaml', 'pubspec.lock', 'lib/**', 'web/**') }}
+          restore-keys: |
+            ${{ runner.os }}-web-build-
+
+      - name: Build web (admin panel)
+        run: |
+          flutter build web \
+            --target=lib/main_admin.dart \
+            --release \
+            --no-tree-shake-icons \
+            --source-maps \
+            --pwa-strategy=offline-first \
+            --dart-define=FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }} \
+            --dart-define=FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }} \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }} \
+            --dart-define=FIREBASE_PROJECT_ID=${{ env.FIREBASE_PROJECT_ID }} \
+            --dart-define=FIREBASE_AUTH_DOMAIN=${{ env.FIREBASE_AUTH_DOMAIN }} \
+            --dart-define=FIREBASE_STORAGE_BUCKET=${{ env.FIREBASE_STORAGE_BUCKET }} \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Verify build output
+        run: |
+          if [ ! -f build/web/main.dart.js ]; then
+            echo "::error::main.dart.js introuvable dans build/web/"
+            exit 1
+          fi
+          echo "main.dart.js size:"
+          du -h build/web/main.dart.js
+
+      - name: Setup Firebase (OIDC)
+        uses: FirebaseExtended/action-setup-firebase@v3
+        with:
+          project_id: ${{ env.FIREBASE_PROJECT_ID }}
+          create_env_file: true
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          firebase deploy \
+            --only hosting \
+            --project ${{ env.FIREBASE_PROJECT_ID }} \
+            --force
+
+      - name: Deployment info
+        run: |
+          echo "Deploiement termine -> https://${{ env.FIREBASE_PROJECT_ID }}.web.app"
+          echo "Deploiement termine -> https://${{ env.FIREBASE_PROJECT_ID }}.firebaseapp.com"
