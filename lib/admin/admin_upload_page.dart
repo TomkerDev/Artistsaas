@@ -195,8 +195,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     });
 
     final String title = _title.text.trim();
-    final String album =
-        _album.text.trim().isEmpty ? 'Single' : _album.text.trim();
+    final String album = _album.text.trim().isEmpty
+        ? 'Single'
+        : _album.text.trim();
     final String trackId =
         '${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -300,8 +301,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       if (snapshot.docs.isEmpty) return;
       await snapshot.docs.first.reference.delete();
       if (mounted) {
-        final ScaffoldMessengerState messenger =
-            ScaffoldMessenger.of(context);
+        final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
         await _listenToTracks();
         if (mounted) {
           messenger.showSnackBar(
@@ -399,6 +399,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          _buildKpiSection(colors),
+                          const SizedBox(height: 24),
                           _buildSectionHeader(
                             colors,
                             'Informations du morceau',
@@ -554,6 +556,132 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         ),
       ),
     );
+  }
+
+  Widget _buildKpiSection(ColorScheme colors) {
+    if (_loadingRole) {
+      return _kpiLoadingSkeleton(colors);
+    }
+
+    final bool isFullAdmin =
+        _userRole == 'agency_admin' && _assignedArtistId == 'all';
+
+    final Query<Map<String, dynamic>> query = isFullAdmin
+        ? FirebaseFirestore.instance.collection('tracks')
+        : FirebaseFirestore.instance
+              .collection('tracks')
+              .where('artistId', isEqualTo: _selectedArtistId);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: query.snapshots(),
+      builder:
+          (
+            BuildContext context,
+            AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+          ) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return _kpiLoadingSkeleton(colors);
+            }
+            if (snapshot.hasError || !snapshot.hasData) {
+              return const SizedBox.shrink();
+            }
+
+            final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+                snapshot.data!.docs;
+            final _KpiData kpiData = _computeKpis(
+              docs,
+              isFullAdmin,
+              _artistName,
+            );
+
+            return _KpiGrid(kpiData: kpiData, colors: colors);
+          },
+    );
+  }
+
+  _KpiData _computeKpis(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+    bool isFullAdmin,
+    String artistName,
+  ) {
+    final int totalTracks = docs.length;
+    final Set<String> albums = <String>{};
+    final Set<String> artistIds = <String>{};
+
+    QueryDocumentSnapshot<Map<String, dynamic>>? lastDoc;
+    DateTime? lastDate;
+
+    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in docs) {
+      final Map<String, dynamic> data = doc.data();
+
+      final String? album = data['album'] as String?;
+      final String albumKey = album != null && album.trim().isNotEmpty
+          ? album.trim()
+          : 'Single';
+      albums.add(albumKey);
+
+      final String? artistId = data['artistId'] as String?;
+      if (artistId != null && artistId.isNotEmpty) {
+        artistIds.add(artistId);
+      }
+
+      final Object? createdAt = data['createdAt'];
+      if (createdAt is Timestamp) {
+        final DateTime date = createdAt.toDate();
+        if (lastDate == null || date.isAfter(lastDate)) {
+          lastDate = date;
+          lastDoc = doc;
+        }
+      }
+    }
+
+    final String lastTrackTitle =
+        lastDoc?.data()['title'] as String? ?? 'Aucun morceau';
+
+    return _KpiData(
+      totalTracks: totalTracks,
+      totalAlbums: albums.length,
+      totalArtists: isFullAdmin ? artistIds.length : -1,
+      artistName: artistName,
+      lastTrackTitle: lastTrackTitle,
+      lastTrackDate: lastDate != null ? _formatDate(lastDate) : null,
+    );
+  }
+
+  Widget _kpiLoadingSkeleton(ColorScheme colors) {
+    return SizedBox(
+      height: 120,
+      child: Row(
+        children: List<Widget>.generate(4, (int i) {
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(
+                left: i > 0 ? 8 : 0,
+                right: i < 3 ? 8 : 0,
+              ),
+              decoration: BoxDecoration(
+                color: colors.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    final String day = dt.day.toString().padLeft(2, '0');
+    final String month = dt.month.toString().padLeft(2, '0');
+    final String year = dt.year.toString();
+    return '$day/$month/$year';
   }
 
   Widget _buildArtistSelector(ColorScheme colors) {
@@ -954,3 +1082,177 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
+// ===== KPI WIDGETS =====
+
+class _KpiData {
+  const _KpiData({
+    required this.totalTracks,
+    required this.totalAlbums,
+    required this.totalArtists,
+    required this.artistName,
+    required this.lastTrackTitle,
+    this.lastTrackDate,
+  });
+
+  final int totalTracks;
+  final int totalAlbums;
+  final int totalArtists;
+  final String artistName;
+  final String lastTrackTitle;
+  final String? lastTrackDate;
+}
+
+class _StatCardData {
+  const _StatCardData({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  final String title;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+}
+
+class _KpiGrid extends StatelessWidget {
+  const _KpiGrid({required this.kpiData, required this.colors});
+
+  final _KpiData kpiData;
+  final ColorScheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<_StatCardData> cards = <_StatCardData>[
+      _StatCardData(
+        title: 'Titres en ligne',
+        value: kpiData.totalTracks.toString(),
+        icon: Icons.music_note,
+        color: const Color(0xFF8E44F0),
+      ),
+      _StatCardData(
+        title: 'Albums & Singles',
+        value: kpiData.totalAlbums.toString(),
+        icon: Icons.album,
+        color: const Color(0xFF3B82F6),
+      ),
+      _StatCardData(
+        title: kpiData.totalArtists >= 0 ? 'Total Artistes' : 'Artiste',
+        value: kpiData.totalArtists >= 0
+            ? kpiData.totalArtists.toString()
+            : kpiData.artistName,
+        icon: Icons.mic,
+        color: const Color(0xFF10B981),
+      ),
+      _StatCardData(
+        title: 'Dernier Ajout',
+        value: kpiData.lastTrackTitle,
+        subtitle: kpiData.lastTrackDate,
+        icon: Icons.history,
+        color: colors.onSurfaceVariant.withValues(alpha: 0.7),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool isWide = constraints.maxWidth > 600;
+        const double spacing = 12;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: cards.asMap().entries.map((
+            MapEntry<int, _StatCardData> entry,
+          ) {
+            final _StatCardData card = entry.value;
+            final double cardWidth = isWide
+                ? (constraints.maxWidth - 3 * spacing) / 4
+                : (constraints.maxWidth - spacing) / 2;
+            return SizedBox(
+              width: cardWidth,
+              child: _StatCard(
+                title: card.title,
+                value: card.value,
+                subtitle: card.subtitle,
+                icon: card.icon,
+                color: card.color,
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.subtitle,
+  });
+
+  final String title;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Card(
+      color: colors.surface,
+      elevation: 2,
+      shadowColor: Colors.black26,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: colors.outline.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(icon, color: color, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: colors.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
