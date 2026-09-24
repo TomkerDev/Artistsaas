@@ -64,8 +64,18 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   Future<void> _loadUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      // Non authentifié : rediriger vers la page de connexion.
       _loadingRole = false;
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {});
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/admin/login', (route) => false);
+          }
+        });
+      }
       return;
     }
 
@@ -119,11 +129,16 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       allAdminArtists.firstWhere((a) => a.id == _selectedArtistId).name;
 
   Future<void> _listenToTracks() async {
+    // Ne pas interroger Firestore si l'utilisateur n'est pas authentifié :
+    // _loadUserInfo() redirigera vers /admin/login, mais _listenToTracks()
+    // est appelée dans initState() avant que la redirection ne s'enclenche.
+    if (FirebaseAuth.instance.currentUser == null) return;
     final QuerySnapshot snapshot = await FirebaseFirestore.instance
         .collection('tracks')
         .where('artistId', isEqualTo: _selectedArtistId)
         .orderBy('createdAt', descending: true)
         .get();
+    if (!mounted) return;
     setState(() {
       _tracks.clear();
       for (final doc in snapshot.docs) {
