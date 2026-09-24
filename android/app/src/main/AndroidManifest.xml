@@ -1,11 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
-    <!-- Lecture réseau (sources distantes du catalogue). -->
+    <!-- Lecture rÃ©seau (sources distantes du catalogue). -->
     <uses-permission android:name="android.permission.INTERNET"/>
-    <!-- Lecture en arrière-plan (just_audio_background / audio_service). -->
+    <!-- Lecture en arriÃ¨re-plan (just_audio_background / audio_service). -->
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- AccÃ¨s aux fichiers audio (Android 13+ et versions antÃ©rieures) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <application
         android:label="@string/app_name"
         android:name="${applicationName}"
@@ -32,7 +37,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <!-- Service de lecture en arrière-plan fourni par just_audio_background. -->
+        <!-- Service de lecture en arriÃ¨re-plan fourni par just_audio_background. -->
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
@@ -42,7 +47,7 @@
                 <action android:name="android.media.browse.MediaBrowserService"/>
             </intent-filter>
         </service>
-        <!-- Récepteur des boutons média (casque, bluetooth, écran verrouillé). -->
+        <!-- RÃ©cepteur des boutons mÃ©dia (casque, bluetooth, Ã©cran verrouillÃ©). -->
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
             android:exported="true"

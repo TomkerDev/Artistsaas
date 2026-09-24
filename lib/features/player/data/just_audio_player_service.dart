@@ -200,15 +200,15 @@ class JustAudioPlayerService implements AudioPlayerService {
   @override
   Future<void> setLoopMode(LoopMode mode) async {
     try {
-      await _player.setLoopMode(
-        switch (mode) {
-          LoopMode.off => ja.LoopMode.off,
-          LoopMode.all => ja.LoopMode.all,
-          LoopMode.one => ja.LoopMode.one,
-        },
-      );
+      await _player.setLoopMode(switch (mode) {
+        LoopMode.off => ja.LoopMode.off,
+        LoopMode.all => ja.LoopMode.all,
+        LoopMode.one => ja.LoopMode.one,
+      });
     } on Object catch (error) {
-      _publish(_state.copyWith(errorMessage: 'Mode de boucle impossible : $error'));
+      _publish(
+        _state.copyWith(errorMessage: 'Mode de boucle impossible : $error'),
+      );
     }
   }
 
@@ -259,7 +259,10 @@ class JustAudioPlayerService implements AudioPlayerService {
         filePath,
         tag: tag,
       ),
-      NetworkPlaybackSource(:final Uri uri) => ja.AudioSource.uri(uri, tag: tag),
+      NetworkPlaybackSource(:final Uri uri) => ja.AudioSource.uri(
+        uri,
+        tag: tag,
+      ),
     };
   }
 

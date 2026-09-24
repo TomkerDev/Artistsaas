@@ -132,16 +132,16 @@ class PlaybackState {
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(queue),
-        currentIndex,
-        isPlaying,
-        isBuffering,
-        position,
-        duration,
-        errorMessage,
-        loopMode,
-        shuffleEnabled,
-      );
+    Object.hashAll(queue),
+    currentIndex,
+    isPlaying,
+    isBuffering,
+    position,
+    duration,
+    errorMessage,
+    loopMode,
+    shuffleEnabled,
+  );
 
   @override
   String toString() =>
@@ -150,4 +150,3 @@ class PlaybackState {
       'position: ${position.inSeconds}s/${duration.inSeconds}s, '
       'loop: $loopMode, shuffle: $shuffleEnabled)';
 }
-

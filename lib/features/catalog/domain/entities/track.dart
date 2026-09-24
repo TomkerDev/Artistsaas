@@ -26,6 +26,7 @@ class Track {
     this.trackNumber,
     this.releaseYear,
     this.coverAsset,
+    this.coverUrl,
     this.audioUrl,
     this.isDownloadable = true,
     this.isNew = false,
@@ -65,6 +66,7 @@ class Track {
       trackNumber: _optionalInt(json, 'track_number'),
       releaseYear: _optionalInt(json, 'release_year'),
       coverAsset: _optionalText(json, 'cover_asset'),
+      coverUrl: _optionalText(json, 'cover_url'),
       audioUrl: audioUrl,
       isDownloadable: _optionalBool(json, 'is_downloadable') ?? true,
       isNew: _optionalBool(json, 'is_new') ?? false,
@@ -98,6 +100,10 @@ class Track {
 
   /// Pochette embarquée ; `null` déclenche un visuel de remplacement.
   final String? coverAsset;
+
+  /// Pochette distante (URL HTTP(S)) servie par l'admin Web.
+  /// `null` ou valide → priorité sur [coverAsset] lors de l'affichage.
+  final String? coverUrl;
 
   /// Source distante, absente de la version embarquée du MVP.
   final Uri? audioUrl;
@@ -142,6 +148,7 @@ class Track {
     int? trackNumber,
     int? releaseYear,
     String? coverAsset,
+    String? coverUrl,
     Uri? audioUrl,
     bool? isDownloadable,
     bool? isNew,
@@ -157,6 +164,7 @@ class Track {
       trackNumber: trackNumber ?? this.trackNumber,
       releaseYear: releaseYear ?? this.releaseYear,
       coverAsset: coverAsset ?? this.coverAsset,
+      coverUrl: coverUrl ?? this.coverUrl,
       audioUrl: audioUrl ?? this.audioUrl,
       isDownloadable: isDownloadable ?? this.isDownloadable,
       isNew: isNew ?? this.isNew,
@@ -176,6 +184,7 @@ class Track {
         other.trackNumber == trackNumber &&
         other.releaseYear == releaseYear &&
         other.coverAsset == coverAsset &&
+        other.coverUrl == coverUrl &&
         other.audioUrl == audioUrl &&
         other.isDownloadable == isDownloadable &&
         other.isNew == isNew &&
@@ -193,6 +202,7 @@ class Track {
     trackNumber,
     releaseYear,
     coverAsset,
+    coverUrl,
     audioUrl,
     isDownloadable,
     isNew,

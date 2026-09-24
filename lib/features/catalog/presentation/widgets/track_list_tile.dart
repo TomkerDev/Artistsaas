@@ -41,23 +41,47 @@ class TrackListTile extends StatelessWidget {
 
     return ListTile(
       onTap: onPlay,
-      leading: track.coverAsset == null
-          ? _CoverPlaceholder(title: track.title, isPlaying: isPlaying)
-          : _CoverImage(
-              asset: track.coverAsset!,
-              isPlaying: isPlaying,
-              fallbackTitle: track.title,
+      leading: _CoverImage(
+        coverUrl: track.coverUrl,
+        asset: track.coverAsset,
+        isPlaying: isPlaying,
+        fallbackTitle: track.title,
+      ),
+      title: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              track.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: isPlaying
+                  ? theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    )
+                  : null,
             ),
-      title: Text(
-        track.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: isPlaying
-            ? theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.bold,
-              )
-            : null,
+          ),
+          if (track.isNew) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.deepPurpleAccent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'NOUVEAU',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
       subtitle: Text(_subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: _TrailingAction(
@@ -132,15 +156,20 @@ class _TrailingAction extends StatelessWidget {
   }
 }
 
-/// Pochette embarquée de la piste, avec repli sur le visuel de marque.
+/// Pochette de la piste : priorité à l'URL distante, puis à l'asset local,
+/// enfin au visuel de marque de repli.
 class _CoverImage extends StatelessWidget {
   const _CoverImage({
-    required this.asset,
+    this.coverUrl,
+    this.asset,
     required this.isPlaying,
     required this.fallbackTitle,
   });
 
-  final String asset;
+  final String? coverUrl;
+
+  /// Chemin de l'asset local (`cover_asset`), `null` si absent.
+  final String? asset;
   final bool isPlaying;
   final String fallbackTitle;
 
@@ -149,26 +178,52 @@ class _CoverImage extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme colors = theme.colorScheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: isPlaying
-          ? Container(
-              width: 48,
-              height: 48,
-              color: colors.primaryContainer,
-              alignment: Alignment.center,
-              child: Icon(Icons.equalizer, color: colors.onPrimaryContainer),
-            )
-          : Image.asset(
-              asset,
-              width: 48,
-              height: 48,
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (BuildContext context, Object error, StackTrace? stack) =>
-                      _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
-            ),
-    );
+    if (isPlaying) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 48,
+          height: 48,
+          color: colors.primaryContainer,
+          alignment: Alignment.center,
+          child: Icon(Icons.equalizer, color: colors.onPrimaryContainer),
+        ),
+      );
+    }
+
+    final bool isUrlValid = coverUrl != null && coverUrl!.startsWith('http');
+
+    if (isUrlValid) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          coverUrl!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (BuildContext context, Object error, StackTrace? stack) =>
+                  _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
+        ),
+      );
+    }
+
+    if (asset != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.asset(
+          asset!,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder:
+              (BuildContext context, Object error, StackTrace? stack) =>
+                  _CoverPlaceholder(title: fallbackTitle, isPlaying: false),
+        ),
+      );
+    }
+
+    return _CoverPlaceholder(title: fallbackTitle, isPlaying: false);
   }
 }
 

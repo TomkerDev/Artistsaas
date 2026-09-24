@@ -5,8 +5,10 @@
 enum LoopMode {
   /// Lecture normale, sans répétition.
   off,
+
   /// Répéter l'intégralité de la file.
   all,
+
   /// Répéter la piste en cours.
   one,
 }

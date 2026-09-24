@@ -65,5 +65,8 @@ abstract final class AppStrings {
   static const String deleteConfirmTitle = 'Supprimer ce morceau ?';
   static const String deleteConfirmMessage =
       'La copie locale sera définitivement supprimée de l\'appareil.';
+  static const String deleteFirestoreTrackMessage =
+      'Cette action supprimera le document Firestore. '
+      'Les fichiers Supabase resteront dans le bucket.';
   static const String cancelAction = 'Annuler';
 }

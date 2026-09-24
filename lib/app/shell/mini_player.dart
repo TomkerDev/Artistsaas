@@ -64,6 +64,11 @@ class MiniPlayer extends ConsumerWidget {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  IconButton(
+                    icon: const Icon(Icons.skip_previous),
+                    tooltip: 'Titre précédent',
+                    onPressed: state.hasPrevious ? controller.previous : null,
+                  ),
                   _MiniPlayPause(state: state, controller: controller),
                   IconButton(
                     icon: const Icon(Icons.skip_next),

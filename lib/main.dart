@@ -1,7 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'app/artist_app.dart';
 import 'firebase_options.dart';
@@ -32,5 +34,18 @@ Future<void> main() async {
   // `ProviderScope` héberge le conteneur d'injection de dépendances. Les
   // implémentations concrètes (catalogue, moteur audio, téléchargements) y sont
   // déclarées à partir de l'étape 1, dans `lib/app/di/`.
+  // Demande les autorisations Android (stockage média + notifications) au lancement.
+  if (!kIsWeb) {
+    await _requestPermissions();
+  }
   runApp(const ProviderScope(child: ArtistApp()));
+}
+
+/// Demande les autorisations Android requises au lancement :
+/// - [Permission.mediaLibrary] → accès aux fichiers audio
+///   (READ_MEDIA_AUDIO sur Android 13+, READ_EXTERNAL_STORAGE sinon)
+/// - [Permission.notification] → notifications de lecture en arrière-plan
+///   (POST_NOTIFICATIONS sur Android 13+)
+Future<void> _requestPermissions() async {
+  await [Permission.mediaLibrary, Permission.notification].request();
 }

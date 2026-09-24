@@ -31,12 +31,11 @@ class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
   @override
   Future<List<Track>> fetchNewTracks(String artistId) async {
     try {
-      final QuerySnapshot<Map<String, dynamic>> snapshot =
-          await _db
-              .collection(collection)
-              .where('artistId', isEqualTo: artistId)
-              .limit(limit)
-              .get();
+      final QuerySnapshot<Map<String, dynamic>> snapshot = await _db
+          .collection(collection)
+          .where('artistId', isEqualTo: artistId)
+          .limit(limit)
+          .get();
 
       final List<Track> tracks = <Track>[
         for (final QueryDocumentSnapshot<Map<String, dynamic>> doc

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
@@ -31,7 +32,22 @@ class HomeScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.homeTitle)),
+      appBar: AppBar(
+        title: const Text(AppStrings.homeTitle),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            tooltip: 'Partager l\'application',
+            onPressed: () {
+              Share.share(
+                'Découvre l\'application officielle de Dilson Le Mustang '
+                'sur Novaa ! Écoute tous ses titres en exclusivité : '
+                'https://novaa-music-tchaddd.web.app',
+              );
+            },
+          ),
+        ],
+      ),
       body: catalog.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (Object error, StackTrace stackTrace) => _CatalogErrorView(
@@ -54,9 +70,9 @@ class _TrackList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final Map<String, DownloadProgress> progress = ref.watch(
-      downloadProgressProvider,
-    ).value ?? const <String, DownloadProgress>{};
+    final Map<String, DownloadProgress> progress =
+        ref.watch(downloadProgressProvider).value ??
+        const <String, DownloadProgress>{};
     final String? currentTrackId = ref.watch(
       playbackControllerProvider.select(
         (PlaybackState state) => state.currentMedia?.trackId,

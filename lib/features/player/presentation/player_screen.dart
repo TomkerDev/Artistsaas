@@ -43,22 +43,43 @@ class _NowPlaying extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final PlaybackMedia media = state.currentMedia!;
-    final bool isFavorite =
-        ref.watch(favoriteIdsProvider).contains(media.trackId);
+    final bool isFavorite = ref
+        .watch(favoriteIdsProvider)
+        .contains(media.trackId);
 
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: <Widget>[
-            _CoverArt(artAsset: media.artAsset, title: media.title),
+            _CoverArt(
+              artAsset: media.artAsset,
+              coverUrl: media.coverUrl,
+              title: media.title,
+            ),
             const SizedBox(height: 24),
-            Text(
-              media.title,
-              style: theme.textTheme.headlineSmall,
-              textAlign: TextAlign.center,
+            // Titre + bouton Favori sur la même ligne.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    media.title,
+                    style: theme.textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _FavoriteButton(
+                  isFavorite: isFavorite,
+                  onToggle: () => _toggleFavorite(ref, media.trackId),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
+            // Nom réel de l'artiste (track.artistName → media.artist).
             Text(
               media.artist,
               style: theme.textTheme.bodyLarge?.copyWith(
@@ -67,32 +88,17 @@ class _NowPlaying extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             _SeekBar(state: state),
-            const SizedBox(height: 8),
-            // En-tête sous le titre : Favori à gauche, Partage à droite.
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  _FavoriteButton(
-                    isFavorite: isFavorite,
-                    onToggle: () => _toggleFavorite(ref, media.trackId),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    iconSize: 28,
-                    tooltip: 'Partager ce morceau',
-                    onPressed: () => _shareTrack(context, media),
-                    icon: const Icon(Icons.share_outlined),
-                  ),
-                ],
-              ),
-            ),
-            // Ligne 1 : Modes (Shuffle à gauche, Repeat à droite).
-            _PlaybackModes(state: state),
             const SizedBox(height: 16),
-            // Ligne 2 : Barre de transport.
-            _TransportControls(state: state),
+            // Toutes les commandes sur une seule ligne, bien centrée.
+            _PlaybackControls(state: state),
+            const SizedBox(height: 24),
+            // Bouton de partage sous le bloc de lecture.
+            IconButton(
+              iconSize: 28,
+              tooltip: 'Partager la musique de ${media.artist}',
+              onPressed: () => _shareTrack(context, media),
+              icon: const Icon(Icons.share_outlined, color: Colors.white),
+            ),
             if (state.hasError) ...<Widget>[
               const SizedBox(height: 12),
               _PlaybackError(state: state),
@@ -105,8 +111,9 @@ class _NowPlaying extends ConsumerWidget {
 
   void _toggleFavorite(WidgetRef ref, String trackId) {
     final FavoritesService service = ref.read(favoritesServiceProvider);
-    final bool currentlyFavorite =
-        ref.read(favoriteIdsProvider).contains(trackId);
+    final bool currentlyFavorite = ref
+        .read(favoriteIdsProvider)
+        .contains(trackId);
     if (currentlyFavorite) {
       service.removeFavorite(trackId);
     } else {
@@ -116,10 +123,13 @@ class _NowPlaying extends ConsumerWidget {
 
   void _shareTrack(BuildContext context, PlaybackMedia media) {
     final String text =
-        'Écoute le titre \'${media.title}\' de ${media.artist} sur '
-        'l\'application officielle Novaa !\n'
-        'https://novaa.app/track/${media.trackId}';
-    Share.share(text, subject: 'Écouter ${media.title} sur Novaa');
+        'Découvre l\'application officielle de ${media.artist} sur '
+        '${AppStrings.appTitle} ! Écoute tous ses titres en exclusivité : '
+        'https://novaa-music-tchaddd.web.app';
+    Share.share(
+      text,
+      subject: 'Écouter ${media.artist} sur ${AppStrings.appTitle}',
+    );
   }
 }
 
@@ -144,9 +154,10 @@ class _FavoriteButton extends StatelessWidget {
   }
 }
 
-/// Ligne de modes : aléatoire à gauche, boucle à droite.
-class _PlaybackModes extends ConsumerWidget {
-  const _PlaybackModes({required this.state});
+/// Toutes les commandes de lecture sur une seule ligne :
+/// Shuffle, Précédent, Lecture/Pause, Suivant, Répéter.
+class _PlaybackControls extends ConsumerWidget {
+  const _PlaybackControls({required this.state});
 
   final PlaybackState state;
 
@@ -158,27 +169,54 @@ class _PlaybackModes extends ConsumerWidget {
     final ColorScheme colors = Theme.of(context).colorScheme;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: <Widget>[
+        // Shuffle
         IconButton(
+          iconSize: 28,
           tooltip: 'Lecture aléatoire',
           onPressed: () =>
               controller.setShuffleModeEnabled(!state.shuffleEnabled),
           icon: Icon(
             Icons.shuffle,
-            color: state.shuffleEnabled ? colors.primary : null,
+            color: state.shuffleEnabled ? colors.primary : Colors.white,
           ),
         ),
+        const SizedBox(width: 16),
+        // Skip Previous
         IconButton(
+          iconSize: 40,
+          tooltip: AppStrings.previousAction,
+          onPressed: state.hasPrevious ? controller.previous : null,
+          icon: const Icon(Icons.skip_previous, color: Colors.white),
+        ),
+        const SizedBox(width: 16),
+        // Play/Pause (grand format)
+        _PlayPauseButton(state: state, controller: controller),
+        const SizedBox(width: 16),
+        // Skip Next
+        IconButton(
+          iconSize: 40,
+          tooltip: AppStrings.nextAction,
+          onPressed: state.hasNext ? controller.next : null,
+          icon: const Icon(Icons.skip_next, color: Colors.white),
+        ),
+        const SizedBox(width: 16),
+        // Repeat
+        IconButton(
+          iconSize: 28,
           tooltip: 'Mode de lecture en boucle',
-          onPressed: () => controller.setLoopMode(_nextLoopMode(state.loopMode)),
+          onPressed: () =>
+              controller.setLoopMode(_nextLoopMode(state.loopMode)),
           icon: Icon(
             switch (state.loopMode) {
               LoopMode.off => Icons.repeat,
               LoopMode.all => Icons.repeat,
               LoopMode.one => Icons.repeat_one,
             },
-            color: state.loopMode == LoopMode.off ? null : colors.primary,
+            color: state.loopMode == LoopMode.off
+                ? Colors.white
+                : colors.primary,
           ),
         ),
       ],
@@ -187,17 +225,18 @@ class _PlaybackModes extends ConsumerWidget {
 
   /// Cycle du mode de boucle : off → toute la file → piste courante → off.
   static LoopMode _nextLoopMode(LoopMode mode) => switch (mode) {
-        LoopMode.off => LoopMode.all,
-        LoopMode.all => LoopMode.one,
-        LoopMode.one => LoopMode.off,
-      };
+    LoopMode.off => LoopMode.all,
+    LoopMode.all => LoopMode.one,
+    LoopMode.one => LoopMode.off,
+  };
 }
 
 /// Pochette du morceau, ou visuel de remplacement.
 class _CoverArt extends StatelessWidget {
-  const _CoverArt({required this.artAsset, required this.title});
+  const _CoverArt({this.artAsset, this.coverUrl, required this.title});
 
   final String? artAsset;
+  final String? coverUrl;
   final String title;
 
   @override
@@ -205,17 +244,59 @@ class _CoverArt extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final ColorScheme colors = theme.colorScheme;
 
+    final bool isUrlValid = coverUrl != null && coverUrl!.startsWith('http');
+
+    if (isUrlValid) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.network(
+            coverUrl!,
+            width: 280,
+            height: 280,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (BuildContext context, Object error, StackTrace? stack) {
+                  return _FallbackCover(colors: colors, title: title);
+                },
+          ),
+        ),
+      );
+    }
     if (artAsset != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          artAsset!,
-          width: 280,
-          height: 280,
-          fit: BoxFit.cover,
-          errorBuilder: (BuildContext context, Object error, StackTrace? stack) {
-            return _FallbackCover(colors: colors, title: title);
-          },
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            artAsset!,
+            width: 280,
+            height: 280,
+            fit: BoxFit.cover,
+            errorBuilder:
+                (BuildContext context, Object error, StackTrace? stack) {
+                  return _FallbackCover(colors: colors, title: title);
+                },
+          ),
         ),
       );
     }
@@ -236,7 +317,14 @@ class _FallbackCover extends StatelessWidget {
       width: 280,
       height: 280,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -248,8 +336,6 @@ class _FallbackCover extends StatelessWidget {
     );
   }
 }
-
-// MARKER_COVER_METHOD (réserve d'extension : pochette distante/fichier)
 
 /// Barre de progression : position courante, curseur et durée totale.
 class _SeekBar extends ConsumerWidget {
@@ -287,43 +373,6 @@ class _SeekBar extends ConsumerWidget {
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Contrôles de transport : précédent, lecture/pause, suivant.
-class _TransportControls extends ConsumerWidget {
-  const _TransportControls({required this.state});
-
-  final PlaybackState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final PlaybackController controller = ref.read(
-      playbackControllerProvider.notifier,
-    );
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        IconButton(
-          iconSize: 40,
-          tooltip: AppStrings.previousAction,
-          onPressed: state.hasPrevious ? controller.previous : null,
-          icon: const Icon(Icons.skip_previous),
-        ),
-        const SizedBox(width: 12),
-        // Bouton principal : buffering -> indicateur d'attente, sinon
-        // lecture/pause selon l'état courant.
-        _PlayPauseButton(state: state, controller: controller),
-        const SizedBox(width: 12),
-        IconButton(
-          iconSize: 40,
-          tooltip: AppStrings.nextAction,
-          onPressed: state.hasNext ? controller.next : null,
-          icon: const Icon(Icons.skip_next),
         ),
       ],
     );
@@ -412,11 +461,7 @@ class _PlayerEmptyView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Icon(
-              Icons.graphic_eq,
-              size: 64,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(Icons.graphic_eq, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
             Text(
               AppStrings.playerEmptyMessage,

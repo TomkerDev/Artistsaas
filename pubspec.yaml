@@ -42,17 +42,19 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   share_plus: ^10.1.4
-  # Catalogue distant : nouveautés publiées par l'artiste.
+  # Demande les autorisations Android au lancement (stockage + notifications).
+  permission_handler: ^11.3.1
+  # Catalogue distant : nouveautÃ©s publiÃ©es par l'artiste.
   firebase_core: ^3.15.2
   cloud_firestore: ^5.6.12
   # Panneau d'administration : connexion des administrateurs (Firebase Auth)
-  # et téléversement des nouveautés (Firebase Storage).
+  # et tÃ©lÃ©versement des nouveautÃ©s (Firebase Storage).
   firebase_auth: ^5.7.0
   firebase_storage: ^12.4.10
-  # Sélection des MP3 et pochettes depuis l'explorateur (web et desktop).
+  # SÃ©lection des MP3 et pochettes depuis l'explorateur (web et desktop).
   file_picker: ^10.3.3
-  # Stockage média externe pour le panneau d'administration multi-artistes
-  # (5 Go gratuits, sans carte bancaire) : téléversement MP3 + pochettes.
+  # Stockage mÃ©dia externe pour le panneau d'administration multi-artistes
+  # (5 Go gratuits, sans carte bancaire) : tÃ©lÃ©versement MP3 + pochettes.
   supabase_flutter: ^2.0.0
 
 dev_dependencies:
@@ -67,8 +69,8 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
-# Icônes de lancement par artiste : la configuration est centralisée dans
-# `flutter_launcher_icons.yaml` (bloc `flavors`), puis générée via :
+# IcÃ´nes de lancement par artiste : la configuration est centralisÃ©e dans
+# `flutter_launcher_icons.yaml` (bloc `flavors`), puis gÃ©nÃ©rÃ©e via :
 #   dart run tool/generate_brand_assets.dart
 #   dart run flutter_launcher_icons
 
@@ -83,16 +85,16 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # Contenu embarqué du MVP : catalogue JSON et fichiers audio.
-  # Les dossiers sont déclarés en bloc, tout fichier qui y est ajouté est inclus.
+  # Contenu embarquÃ© du MVP : catalogue JSON et fichiers audio.
+  # Les dossiers sont dÃ©clarÃ©s en bloc, tout fichier qui y est ajoutÃ© est inclus.
   assets:
     - assets/catalog/
     - assets/audio/
     - assets/covers/
     - assets/brand/
-    # Icônes sources de génération des icônes natives par artiste.
+    # IcÃ´nes sources de gÃ©nÃ©ration des icÃ´nes natives par artiste.
     - assets/icons/
-    # Contenus embarqués propres à chaque artiste (distribués via les flavors).
+    # Contenus embarquÃ©s propres Ã  chaque artiste (distribuÃ©s via les flavors).
     - assets/artists/artist_1/
     - assets/artists/artist_2/
     - assets/artists/artist_3/

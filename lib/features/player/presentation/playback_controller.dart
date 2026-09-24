@@ -74,8 +74,7 @@ class PlaybackController extends Notifier<PlaybackState> {
 
   /// Active ou désactive le mode de lecture aléatoire.
   Future<void> setShuffleModeEnabled(bool enabled) async {
-    await ref.read(audioPlayerServiceProvider)
-        .setShuffleModeEnabled(enabled);
+    await ref.read(audioPlayerServiceProvider).setShuffleModeEnabled(enabled);
     state = state.copyWith(shuffleEnabled: enabled);
   }
 
@@ -87,15 +86,13 @@ class PlaybackController extends Notifier<PlaybackState> {
 
   /// Avance de 5 secondes dans la piste courante.
   Future<void> seekForward() async {
-    final Duration newPosition =
-        state.position + const Duration(seconds: 5);
+    final Duration newPosition = state.position + const Duration(seconds: 5);
     await seek(newPosition);
   }
 
   /// Recule de 5 secondes dans la piste courante.
   Future<void> seekBackward() async {
-    final Duration newPosition =
-        state.position - const Duration(seconds: 5);
+    final Duration newPosition = state.position - const Duration(seconds: 5);
     await seek(newPosition);
   }
 
@@ -112,19 +109,14 @@ class PlaybackController extends Notifier<PlaybackState> {
     try {
       await ref.read(audioPlayerServiceProvider).stop();
     } on Object catch (error) {
-      state = state.copyWith(
-          errorMessage: "L'arrêt a échoué : $error");
+      state = state.copyWith(errorMessage: "L'arrêt a échoué : $error");
       rethrow;
     }
     state = const PlaybackState();
   }
 
-  Future<void> _start(
-    List<PlaybackMedia> queue,
-    int initialIndex,
-  ) async {
-    final AudioPlayerService service =
-        ref.read(audioPlayerServiceProvider);
+  Future<void> _start(List<PlaybackMedia> queue, int initialIndex) async {
+    final AudioPlayerService service = ref.read(audioPlayerServiceProvider);
     try {
       await service.setQueue(queue, initialIndex: initialIndex);
     } on Object catch (error) {
@@ -151,4 +143,3 @@ class PlaybackController extends Notifier<PlaybackState> {
 final NotifierProvider<PlaybackController, PlaybackState>
 playbackControllerProvider =
     NotifierProvider<PlaybackController, PlaybackState>(PlaybackController.new);
-

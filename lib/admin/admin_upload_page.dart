@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../core/constants/app_strings.dart';
 import '../../services/supabase_storage_service.dart';
+import 'admin_routes.dart';
 
 /// Panneau de publication multi-artistes (Flutter Web).
 ///
@@ -20,20 +22,9 @@ class AdminUploadPage extends ConsumerStatefulWidget {
 }
 
 class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
-  static const List<_ArtistOption> _allArtists = [
-    _ArtistOption(id: 'dilson_le_mustang', name: 'Dilson Le Mustang'),
-    _ArtistOption(id: 'jethsonat', name: 'Jethsonat'),
-    _ArtistOption(id: 'artist_1', name: 'Artist 1'),
-    _ArtistOption(id: 'artist_2', name: 'Artist 2'),
-    _ArtistOption(id: 'artist_3', name: 'Artist 3'),
-    _ArtistOption(id: 'artist_4', name: 'Artist 4'),
-    _ArtistOption(id: 'artist_5', name: 'Artist 5'),
-    _ArtistOption(id: 'artist_6', name: 'Artist 6'),
-    _ArtistOption(id: 'artist_7', name: 'Artist 7'),
-    _ArtistOption(id: 'artist_8', name: 'Artist 8'),
-    _ArtistOption(id: 'artist_9', name: 'Artist 9'),
-    _ArtistOption(id: 'artist_10', name: 'Artist 10'),
-  ];
+  // La liste centralisée des 12 artistes provient de `admin_routes.dart`
+  // (constante `allAdminArtists` / classe `AdminArtistOption`), évitant ainsi
+  // la duplication entre le panneau d'upload et les flavors Android.
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _title = TextEditingController();
@@ -43,7 +34,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   late String _selectedArtistId;
   String? _userId;
   String? _userRole;
-  String get _modeLabel => _userRole == 'agency_admin' ? 'Administrateur' : 'Artiste';
+  String? _assignedArtistId;
+  String get _modeLabel =>
+      _userRole == 'agency_admin' ? 'Administrateur' : 'Artiste';
 
   Uint8List? _audioBytes;
   String? _audioFileName;
@@ -54,25 +47,63 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   int _progress = 0;
   String? _errorMessage;
 
+  /// `true` tant que le document Firestore `admin_users/{uid}` n'a pas
+  /// été lu — évite l'affichage du Dropdown avant que le rôle ne soit connu.
+  bool _loadingRole = true;
+
   final List<Map<String, dynamic>> _tracks = [];
 
   @override
   void initState() {
     super.initState();
-    _selectedArtistId = _allArtists.first.id;
+    _selectedArtistId = allAdminArtists.first.id;
     _listenToTracks();
     _loadUserInfo();
   }
 
   Future<void> _loadUserInfo() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      setState(() {
-        _userId = user.uid;
-        // Le rôle peut être stocké dans les custom claims ou dans Firestore
-        // Pour simplifier, on utilise un rôle par défaut
+    if (user == null) {
+      _loadingRole = false;
+      if (mounted) setState(() {});
+      return;
+    }
+
+    _userId = user.uid;
+
+    try {
+      final DocumentSnapshot doc = await FirebaseFirestore.instance
+          .collection('admin_users')
+          .doc(user.uid)
+          .get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        _userRole = data['role'] as String? ?? 'artist';
+        _assignedArtistId = data['assignedArtistId'] as String? ?? '';
+      } else {
+        // Aucun document admin : rôle par défaut limité à un artiste.
         _userRole = 'artist';
-      });
+        _assignedArtistId = '';
+      }
+    } on FirebaseException {
+      // En cas d'erreur, démarre en mode artiste restreint.
+      _userRole = 'artist';
+      _assignedArtistId = '';
+    }
+
+    // Artistes non-admins (sans accès 'all') : verrouiller le sélecteur
+    // sur leur artiste assigné (ex: 'dilson_le_mustang').
+    if (_userRole != 'agency_admin' &&
+        _assignedArtistId != null &&
+        _assignedArtistId != 'all') {
+      _selectedArtistId = _assignedArtistId!;
+    }
+
+    if (mounted) {
+      _loadingRole = false;
+      setState(() {});
+      await _listenToTracks();
     }
   }
 
@@ -85,7 +116,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   }
 
   String get _artistName =>
-      _allArtists.firstWhere((a) => a.id == _selectedArtistId).name;
+      allAdminArtists.firstWhere((a) => a.id == _selectedArtistId).name;
 
   Future<void> _listenToTracks() async {
     final QuerySnapshot snapshot = await FirebaseFirestore.instance
@@ -150,7 +181,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     });
   }
 
-
   Future<void> _publish() async {
     final FormState? form = _formKey.currentState;
     if (form == null || !form.validate()) return;
@@ -166,8 +196,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
     final String title = _title.text.trim();
     final String album = _album.text.trim();
-    final String trackId = title.toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]+'), '_') +
+    final String trackId =
+        title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_') +
         '_' +
         DateTime.now().millisecondsSinceEpoch.toString();
 
@@ -224,8 +254,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage =
-            'Erreur lors de la publication : $error');
+        setState(
+          () => _errorMessage = 'Erreur lors de la publication : $error',
+        );
       }
     } finally {
       if (mounted) setState(() => _publishing = false);
@@ -245,19 +276,16 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Supprimer ce morceau ?'),
-        content: const Text(
-          'Cette action supprimera le document Firestore. '
-          'Les fichiers Supabase resteront dans le bucket.',
-        ),
+        title: const Text(AppStrings.deleteConfirmTitle),
+        content: const Text(AppStrings.deleteFirestoreTrackMessage),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Annuler'),
+            child: const Text(AppStrings.cancelAction),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Supprimer'),
+            child: const Text(AppStrings.deleteAction),
           ),
         ],
       ),
@@ -274,14 +302,13 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       await snapshot.docs.first.reference.delete();
       if (mounted) {
         await _listenToTracks();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Morceau supprimé.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Morceau supprimé.')));
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage =
-            'Échec de la suppression : $error');
+        setState(() => _errorMessage = 'Échec de la suppression : $error');
       }
     }
   }
@@ -339,7 +366,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
               }
             },
             icon: const Icon(Icons.logout, color: Colors.white70),
-            label: const Text('Déconnexion', style: TextStyle(color: Colors.white70)),
+            label: const Text(
+              'Déconnexion',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           const SizedBox(width: 8),
         ],
@@ -349,10 +379,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              colors.surface,
-              colors.surface.withValues(alpha: 0.03),
-            ],
+            colors: [colors.surface, colors.surface.withValues(alpha: 0.03)],
           ),
         ),
         child: SafeArea(
@@ -475,7 +502,11 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                                     ),
                                   )
                                 : const Icon(Icons.cloud_upload),
-                            label: Text(_publishing ? 'Publication\u2026' : 'Publier sur Supabase & Firestore'),
+                            label: Text(
+                              _publishing
+                                  ? 'Publication\u2026'
+                                  : 'Publier sur Supabase & Firestore',
+                            ),
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -489,7 +520,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                             LinearProgressIndicator(
                               value: _progress / 100,
                               backgroundColor: colors.primaryContainer,
-                              valueColor: AlwaysStoppedAnimation(colors.primary),
+                              valueColor: AlwaysStoppedAnimation(
+                                colors.primary,
+                              ),
                             ),
                             const SizedBox(height: 4),
                             Text(
@@ -520,9 +553,44 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     );
   }
 
-
   Widget _buildArtistSelector(ColorScheme colors) {
-    final bool isAgencyAdmin = _userRole == 'agency_admin';
+    // Pendant le chargement du rôle utilisateur, on affiche un indicateur
+    // de progression au lieu du Dropdown pour éviter tout clignotement.
+    if (_loadingRole) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border(
+            bottom: BorderSide(
+              color: colors.outline.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Text(
+              'Artiste cible :',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
+            ),
+            const SizedBox(width: 12),
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Le Dropdown est activé pour les admins ou les comptes avec accès
+    // global ('all'), sinon il reste verrouillé sur l'artiste assigné.
+    final bool canChooseArtist =
+        _userRole == 'agency_admin' || _assignedArtistId == 'all';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
@@ -538,15 +606,15 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         children: [
           Text(
             'Artiste cible :',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colors.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
           const SizedBox(width: 12),
-          if (isAgencyAdmin)
+          if (canChooseArtist)
             Expanded(
               child: _ArtistDropdown(
-                artists: _allArtists,
+                artists: allAdminArtists,
                 selectedId: _selectedArtistId,
                 onChanged: _onArtistChanged,
                 disabled: false,
@@ -555,7 +623,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
           else
             Expanded(
               child: _ArtistDropdown(
-                artists: _allArtists,
+                artists: allAdminArtists,
                 selectedId: _selectedArtistId,
                 onChanged: (_) {},
                 disabled: true,
@@ -563,8 +631,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
             ),
           const SizedBox(width: 8),
           Icon(
-            isAgencyAdmin ? Icons.admin_panel_settings : Icons.lock_outline,
-            color: isAgencyAdmin ? colors.primary : colors.onSurfaceVariant,
+            canChooseArtist ? Icons.admin_panel_settings : Icons.lock_outline,
+            color: canChooseArtist ? colors.primary : colors.onSurfaceVariant,
             size: 20,
           ),
         ],
@@ -576,17 +644,11 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: colors.onSurface,
-            fontWeight: FontWeight.bold,
-          ),
+        color: colors.onSurface,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
-}
-
-class _ArtistOption {
-  const _ArtistOption({required this.id, required this.name});
-  final String id;
-  final String name;
 }
 
 class _ArtistDropdown extends StatelessWidget {
@@ -597,7 +659,7 @@ class _ArtistDropdown extends StatelessWidget {
     required this.disabled,
   });
 
-  final List<_ArtistOption> artists;
+  final List<AdminArtistOption> artists;
   final String selectedId;
   final ValueChanged<String> onChanged;
   final bool disabled;
@@ -621,8 +683,7 @@ class _ArtistDropdown extends StatelessWidget {
           isExpanded: true,
           disabledHint: Text(
             _selectedName,
-            style: TextStyle(
-                color: colors.onSurface.withValues(alpha: 0.5)),
+            style: TextStyle(color: colors.onSurface.withValues(alpha: 0.5)),
           ),
           dropdownColor: colors.surface,
           icon: Icon(
@@ -635,11 +696,13 @@ class _ArtistDropdown extends StatelessWidget {
               child: Row(
                 children: [
                   if (a.id == selectedId)
-                    Icon(Icons.check_circle,
-                        size: 16, color: colors.primary)
+                    Icon(Icons.check_circle, size: 16, color: colors.primary)
                   else
-                    Icon(Icons.circle_outlined,
-                        size: 16, color: colors.onSurfaceVariant),
+                    Icon(
+                      Icons.circle_outlined,
+                      size: 16,
+                      color: colors.onSurfaceVariant,
+                    ),
                   const SizedBox(width: 8),
                   Text(a.name),
                 ],
@@ -742,9 +805,9 @@ class _TrackList extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Aucun morceau publié pour cet artiste.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
             ),
           ],
         ),
@@ -768,9 +831,7 @@ class _TrackList extends StatelessWidget {
           decoration: BoxDecoration(
             color: colors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colors.outline.withValues(alpha: 0.15),
-            ),
+            border: Border.all(color: colors.outline.withValues(alpha: 0.15)),
           ),
           child: Row(
             children: [
@@ -795,8 +856,8 @@ class _TrackList extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -804,10 +865,9 @@ class _TrackList extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         album,
-                        style:
-                            Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: colors.onSurfaceVariant,
-                                ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -816,11 +876,9 @@ class _TrackList extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         _formatDate(createdAt.toDate()),
-                        style:
-                            Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color:
-                                      colors.onSurfaceVariant.withValues(alpha: 0.6),
-                                ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant.withValues(alpha: 0.6),
+                        ),
                       ),
                     ],
                   ],
@@ -882,9 +940,9 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colors.onErrorContainer,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: colors.onErrorContainer),
             ),
           ),
         ],
@@ -892,4 +950,3 @@ class _ErrorBanner extends StatelessWidget {
     );
   }
 }
-

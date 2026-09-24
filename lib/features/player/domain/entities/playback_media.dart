@@ -12,6 +12,7 @@ class PlaybackMedia {
     required this.artist,
     required this.source,
     this.artAsset,
+    this.coverUrl,
   });
 
   /// Identifiant de la piste d'origine.
@@ -29,6 +30,10 @@ class PlaybackMedia {
   /// Pochette embarquée, ou `null` si la piste n'en fournit pas.
   final String? artAsset;
 
+  /// Pochette distante (URL HTTP(S)) servie par l'admin Web.
+  /// `null` ou valide → priorité sur [artAsset] lors de l'affichage.
+  final String? coverUrl;
+
   @override
   bool operator ==(Object other) {
     return other is PlaybackMedia &&
@@ -36,11 +41,13 @@ class PlaybackMedia {
         other.title == title &&
         other.artist == artist &&
         other.source == source &&
-        other.artAsset == artAsset;
+        other.artAsset == artAsset &&
+        other.coverUrl == coverUrl;
   }
 
   @override
-  int get hashCode => Object.hash(trackId, title, artist, source, artAsset);
+  int get hashCode =>
+      Object.hash(trackId, title, artist, source, artAsset, coverUrl);
 
   @override
   String toString() => 'PlaybackMedia($trackId, « $title »)';
