@@ -2,8 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'admin_upload_page.dart';
-
 /// Écran de connexion du panneau d'administration.
 ///
 /// Utilise Firebase Authentication (email + mot de passe) pour authentifier
@@ -43,6 +41,12 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
+      // Connexion réussie : rediriger vers le panneau d'upload.
+      if (mounted) {
+        await Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/admin/upload', (route) => false);
+      }
     } on FirebaseAuthException catch (e) {
       setState(() {
         _errorMessage = _mapFirebaseError(e.code);
@@ -189,16 +193,10 @@ class _AdminLoginPageState extends ConsumerState<AdminLoginPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const AdminUploadPage(),
-                        ),
-                      );
-                    },
-                    child: const Text('Accès limité (sans connexion)'),
-                  ),
+                  // NOTE: Le bouton "Accès limité (sans connexion)" a été
+                  // supprimé pour des raisons de sécurité. Un accès non
+                  // authentifié au panneau d'administration n'est plus possible.
+                  const SizedBox.shrink(),
                 ],
               ),
             ),
