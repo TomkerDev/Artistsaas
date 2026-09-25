@@ -28,7 +28,13 @@ Future<void> main() async {
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.tomker.artistsaas.channel.audio',
     androidNotificationChannelName: 'Lecture musicale Novaa',
+    androidNotificationChannelDescription:
+        'Lecture de la musique de Dilson Le Mustang',
+    // La notification doit rester dismissible : sa suppression appelle le
+    // handler audio, qui appelle stop() et libère le lecteur just_audio.
     androidNotificationOngoing: false,
+    // Un arrêt ou une pause quitte immédiatement le service foreground afin
+    // que la notification de l'écran de verrouillage disparaisse sans attendre.
     androidStopForegroundOnPause: true,
   );
   // `ProviderScope` héberge le conteneur d'injection de dépendances. Les

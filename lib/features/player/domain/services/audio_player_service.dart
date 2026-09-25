@@ -40,7 +40,9 @@ abstract interface class AudioPlayerService {
   /// Revient à la piste précédente si elle existe.
   Future<void> skipToPrevious();
 
-  /// Arrête la lecture et remet le moteur à l'état d'attente (position à zéro).
+  /// Arrête la lecture, remet la position à zéro et détache la notification
+  /// d'arrière-plan. `just_audio_background` relie également la suppression
+  /// de la notification à cet même appel de `stop()` via son AudioHandler.
   Future<void> stop();
 
   /// Modifie le mode de lecture en boucle.

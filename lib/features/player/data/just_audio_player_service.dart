@@ -183,8 +183,9 @@ class JustAudioPlayerService implements AudioPlayerService {
   Future<void> stop() async {
     try {
       await _player.stop();
-      // La position repart à zéro et la lecture est suspendue : publié
-      // explicitement car `stop()` ne déclenche pas toujours de flux position.
+      // `stop()` interrompt le média et vide le tampon de lecture. La position
+      // repart à zéro et la lecture est suspendue : publié explicitement car
+      // `stop()` ne déclenche pas toujours de flux position.
       _publish(
         _state.copyWith(
           isPlaying: false,
