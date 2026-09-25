@@ -5,6 +5,7 @@ import '../../core/constants/app_strings.dart';
 import '../../features/catalog/presentation/home_screen.dart';
 import '../../features/library/presentation/my_music_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
+import '../../features/store/presentation/store_show_screen.dart';
 import 'mini_player.dart';
 
 /// Onglet sélectionné, partagé entre la coquille et le mini-lecteur.
@@ -29,6 +30,8 @@ class _HomeShellState extends State<HomeShell> {
     HomeScreen(),
     PlayerScreen(),
     MyMusicScreen(),
+    StoreShowScreen(),
+    AboutArtistScreen(),
   ];
 
   int _selectedIndex = 0;
@@ -99,6 +102,16 @@ class _HomeShellState extends State<HomeShell> {
               icon: Icon(Icons.library_music_outlined),
               selectedIcon: Icon(Icons.library_music),
               label: AppStrings.tabMyMusic,
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.storefront_outlined),
+              selectedIcon: Icon(Icons.storefront),
+              label: 'Boutique & Show',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline),
+              selectedIcon: Icon(Icons.person),
+              label: 'À Propos',
             ),
           ],
         ),

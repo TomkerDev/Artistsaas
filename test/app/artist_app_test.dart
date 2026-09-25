@@ -6,6 +6,7 @@ import 'package:artistsaas/features/catalog/presentation/home_screen.dart';
 import 'package:artistsaas/features/catalog/presentation/widgets/track_list_tile.dart';
 import 'package:artistsaas/features/library/presentation/my_music_screen.dart';
 import 'package:artistsaas/features/player/presentation/player_screen.dart';
+import 'package:artistsaas/features/store/presentation/store_show_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -45,15 +46,20 @@ void main() {
   }
 
   /// Indice de l'onglet affiché par la coquille.
-  int selectedTab(WidgetTester tester) =>
-      tester.widget<IndexedStack>(find.byType(IndexedStack)).index ?? 0;
+  int selectedTab(WidgetTester tester) => tester
+      .widgetList<IndexedStack>(find.byType(IndexedStack))
+      .map((IndexedStack stack) => stack.index)
+      .firstWhere((int? index) => index != null)!;
 
   group('ArtistApp', () {
-    testWidgets('expose les trois onglets du MVP', (WidgetTester tester) async {
+    testWidgets('expose les cinq onglets de l’application', (
+      WidgetTester tester,
+    ) async {
       await pumpApp(tester);
 
       expect(find.byType(NavigationBar), findsOneWidget);
-      expect(find.byType(NavigationDestination), findsNWidgets(3));
+      expect(find.byType(NavigationDestination), findsNWidgets(5));
+      expect(find.text('Boutique & Show'), findsOneWidget);
       expect(find.text(AppStrings.tabHome), findsOneWidget);
       expect(find.text(AppStrings.tabPlayer), findsOneWidget);
       expect(find.text(AppStrings.tabMyMusic), findsOneWidget);
@@ -73,6 +79,7 @@ void main() {
       // les écrans des autres onglets restent montés, mais hors écran.
       expect(find.byType(PlayerScreen), findsNothing);
       expect(find.byType(MyMusicScreen), findsNothing);
+      expect(find.byType(StoreShowScreen), findsNothing);
     });
 
     testWidgets('change d\'onglet et revient à l\'accueil', (
@@ -95,6 +102,16 @@ void main() {
       expect(find.byType(PlayerScreen), findsOneWidget);
       expect(find.text(AppStrings.playerEmptyMessage), findsOneWidget);
       expect(find.byType(MyMusicScreen), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.storefront_outlined));
+      await tester.pumpAndSettle();
+      expect(selectedTab(tester), 3);
+      expect(find.byType(StoreShowScreen), findsOneWidget);
+      expect(find.text('Acheter mon Billet'), findsNWidgets(2));
+
+      await tester.tap(find.text('Merchandise'));
+      await tester.pumpAndSettle();
+      expect(find.text('T-shirt Novaa'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.home_outlined));
       await tester.pumpAndSettle();
