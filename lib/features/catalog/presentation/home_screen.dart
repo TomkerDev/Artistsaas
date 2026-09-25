@@ -80,17 +80,24 @@ class _TrackList extends ConsumerWidget {
     );
 
     return ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: tracks.length,
-      separatorBuilder: (BuildContext context, int index) =>
-          const Divider(height: 1, indent: 72),
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
+      itemCount: tracks.length + 1,
+      separatorBuilder: (BuildContext context, int index) => Divider(
+        height: 1,
+        indent: index == 0 ? 16 : 72,
+        endIndent: index == 0 ? 16 : 16,
+      ),
       itemBuilder: (BuildContext context, int index) {
-        final Track track = tracks[index];
+        if (index == 0) {
+          return _CatalogHero(coverUrl: tracks.first.coverUrl);
+        }
+
+        final Track track = tracks[index - 1];
         return TrackListTile(
           track: track,
           isPlaying: track.id == currentTrackId,
           downloadProgress: progress[track.id],
-          onPlay: () => _play(ref, index),
+          onPlay: () => _play(ref, index - 1),
           onDownload: () => _download(context, ref, track),
         );
       },
@@ -222,6 +229,184 @@ class _CatalogErrorView extends StatelessWidget {
               label: const Text(AppStrings.retryAction),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bannière présentant l'artiste et ses compilations officielles.
+class _CatalogHero extends StatelessWidget {
+  const _CatalogHero({this.coverUrl});
+
+  /// Pochette fournie par Firestore, lorsqu'elle est disponible.
+  final String? coverUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final double height = (constraints.maxWidth * 0.72).clamp(
+            220.0,
+            300.0,
+          );
+
+          return Container(
+            height: height,
+            margin: const EdgeInsets.only(bottom: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  _HeroImage(coverUrl: coverUrl),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: <Color>[
+                          Color(0x19000000),
+                          Color(0x26000000),
+                          Color(0xD9000000),
+                        ],
+                        stops: <double>[0, 0.42, 1],
+                      ),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 20, 20, 18),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _CompilationBadge(),
+                          SizedBox(height: 10),
+                          Text(
+                            'Dilson Le Mustang',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              height: 1.1,
+                              fontWeight: FontWeight.w800,
+                              shadows: <Shadow>[
+                                Shadow(color: Colors.black54, blurRadius: 4),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Pochette distante prioritaire, avec repli sur l'asset embarqué.
+class _HeroImage extends StatelessWidget {
+  const _HeroImage({this.coverUrl});
+
+  final String? coverUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    const String localCover = 'assets/covers/dilson_cover.png';
+    final String? remoteCover = coverUrl;
+    final bool hasRemoteCover =
+        remoteCover != null &&
+        remoteCover.trim().isNotEmpty &&
+        remoteCover.startsWith('http');
+
+    if (hasRemoteCover) {
+      return Image.network(
+        remoteCover,
+        fit: BoxFit.cover,
+        errorBuilder:
+            (BuildContext context, Object error, StackTrace? stackTrace) =>
+                Image.asset(
+                  localCover,
+                  fit: BoxFit.cover,
+                  errorBuilder: _fallbackBuilder,
+                ),
+        loadingBuilder:
+            (BuildContext context, Widget child, ImageChunkEvent? progress) =>
+                progress == null ? child : const _HeroFallback(),
+      );
+    }
+
+    return Image.asset(
+      localCover,
+      fit: BoxFit.cover,
+      errorBuilder: _fallbackBuilder,
+    );
+  }
+
+  static Widget _fallbackBuilder(
+    BuildContext context,
+    Object error,
+    StackTrace? stackTrace,
+  ) {
+    return const _HeroFallback();
+  }
+}
+
+class _HeroFallback extends StatelessWidget {
+  const _HeroFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF24113F),
+      child: Center(
+        child: Icon(Icons.library_music, color: Colors.white54, size: 48),
+      ),
+    );
+  }
+}
+
+class _CompilationBadge extends StatelessWidget {
+  const _CompilationBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(100),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        child: Text(
+          'Compil Officielles',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.3,
+          ),
         ),
       ),
     );

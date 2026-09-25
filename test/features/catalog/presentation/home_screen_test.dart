@@ -16,7 +16,8 @@ import '../../../helpers/fakes.dart';
 
 /// Dépôt dont la lecture ne se termine jamais : indispensable pour observer
 /// l'état de chargement de façon déterministe.
-final class _PendingMusicRepository implements MusicRepository, TrackRepository {
+final class _PendingMusicRepository
+    implements MusicRepository, TrackRepository {
   @override
   Future<List<Track>> getTracks() => Completer<List<Track>>().future;
 }
@@ -93,6 +94,43 @@ void main() {
       expect(find.text('1:05'), findsOneWidget);
     });
 
+    testWidgets('affiche une bannière responsive avant les titres', (
+      WidgetTester tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await pumpHome(
+        tester,
+        FakeMusicRepository(
+          tracks: <Track>[buildTrack(title: 'Premier morceau')],
+        ),
+      );
+      await tester.pump();
+
+      final Finder hero = find.ancestor(
+        of: find.text('Dilson Le Mustang'),
+        matching: find.byType(ClipRRect),
+      );
+      expect(find.text('Compil Officielles'), findsOneWidget);
+      expect(hero, findsWidgets);
+      final Finder heroDecorations = find.descendant(
+        of: hero.first,
+        matching: find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).gradient is LinearGradient,
+        ),
+      );
+      expect(heroDecorations, findsOneWidget);
+      expect(
+        find.descendant(of: hero.first, matching: find.byType(Image)),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('le bouton de téléchargement matérialise le morceau', (
       WidgetTester tester,
     ) async {
@@ -108,10 +146,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(downloadRepository!.downloadCount, 1);
-      expect(
-        find.text(AppStrings.downloadCompletedMessage),
-        findsOneWidget,
-      );
+      expect(find.text(AppStrings.downloadCompletedMessage), findsOneWidget);
     });
 
     testWidgets('affiche un message lorsque le catalogue est vide', (
