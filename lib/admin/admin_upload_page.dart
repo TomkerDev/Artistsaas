@@ -51,13 +51,27 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   /// été lu — évite l'affichage du Dropdown avant que le rôle ne soit connu.
   bool _loadingRole = true;
 
-  final List<Map<String, dynamic>> _tracks = [];
+  Stream<QuerySnapshot<Map<String, dynamic>>> _tracksStream() {
+    if (_loadingRole || FirebaseAuth.instance.currentUser == null) {
+      return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
+    }
+    final bool allArtists =
+        _userRole == 'agency_admin' && _assignedArtistId == 'all';
+    final Query<Map<String, dynamic>> query = allArtists
+        ? FirebaseFirestore.instance.collection('tracks')
+        : FirebaseFirestore.instance.collection('tracks').where(
+              'artistId',
+              isEqualTo: _assignedArtistId != null && _userRole == 'artist'
+                  ? _assignedArtistId
+                  : _selectedArtistId,
+            );
+    return query.orderBy('createdAt', descending: true).snapshots();
+  }
 
   @override
   void initState() {
     super.initState();
     _selectedArtistId = allAdminArtists.first.id;
-    _listenToTracks();
     _loadUserInfo();
   }
 
@@ -113,7 +127,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     if (mounted) {
       _loadingRole = false;
       setState(() {});
-      await _listenToTracks();
     }
   }
 
@@ -128,29 +141,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   String get _artistName =>
       allAdminArtists.firstWhere((a) => a.id == _selectedArtistId).name;
 
-  Future<void> _listenToTracks() async {
-    // Ne pas interroger Firestore si l'utilisateur n'est pas authentifié :
-    // _loadUserInfo() redirigera vers /admin/login, mais _listenToTracks()
-    // est appelée dans initState() avant que la redirection ne s'enclenche.
-    if (FirebaseAuth.instance.currentUser == null) return;
-    final QuerySnapshot snapshot = await FirebaseFirestore.instance
-        .collection('tracks')
-        .where('artistId', isEqualTo: _selectedArtistId)
-        .orderBy('createdAt', descending: true)
-        .get();
-    if (!mounted) return;
-    setState(() {
-      _tracks.clear();
-      for (final doc in snapshot.docs) {
-        _tracks.add(doc.data() as Map<String, dynamic>);
-      }
-    });
-  }
-
   void _onArtistChanged(String newArtistId) {
     if (newArtistId == _selectedArtistId) return;
     setState(() => _selectedArtistId = newArtistId);
-    _listenToTracks();
   }
 
   Future<void> _pickAudio() async {
@@ -208,8 +201,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     final String audioExt = _audioFileName?.split('.').last.toLowerCase() ?? '';
     if (audioExt != 'mp3') {
       setState(
-        () => _errorMessage =
-            'Format audio non supporté : '
+        () => _errorMessage = 'Format audio non supporté : '
             'uniquement les fichiers .mp3 sont acceptés.',
       );
       return;
@@ -221,9 +213,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     });
 
     final String title = _title.text.trim();
-    final String album = _album.text.trim().isEmpty
-        ? 'Single'
-        : _album.text.trim();
+    final String album =
+        _album.text.trim().isEmpty ? 'Single' : _album.text.trim();
     final String trackId =
         '${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}_${DateTime.now().millisecondsSinceEpoch}';
 
@@ -279,7 +270,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
       if (mounted) setState(() => _progress = 100);
       _clearForm();
-      await _listenToTracks();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -349,7 +339,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       await snapshot.docs.first.reference.delete();
       if (mounted) {
         final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-        await _listenToTracks();
         if (mounted) {
           messenger.showSnackBar(
             const SnackBar(content: Text('Morceau supprimé.')),
@@ -408,6 +397,11 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
           ],
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).pushNamed('/admin/store'),
+            icon: const Icon(Icons.storefront_outlined),
+            label: const Text('Boutique & Show'),
+          ),
           TextButton.icon(
             onPressed: () async {
               final NavigatorState navigator = Navigator.of(context);
@@ -512,7 +506,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                               return null;
                             },
                           ),
-
                           const SizedBox(height: 20),
                           _buildSectionHeader(colors, 'Fichiers à téléverser'),
                           const SizedBox(height: 12),
@@ -587,10 +580,31 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                           const Divider(height: 32),
                           _buildSectionHeader(colors, 'Morceaux publiés'),
                           const SizedBox(height: 12),
-                          _TrackList(
-                            tracks: _tracks,
-                            artistId: _selectedArtistId,
-                            onDelete: _deleteTrack,
+                          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                            stream: _tracksStream(),
+                            builder: (
+                              BuildContext context,
+                              AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>
+                                  snapshot,
+                            ) {
+                              final List<Map<String, dynamic>> tracks =
+                                  snapshot.data?.docs
+                                          .map(
+                                            (
+                                              QueryDocumentSnapshot<
+                                                      Map<String, dynamic>>
+                                                  doc,
+                                            ) =>
+                                                doc.data(),
+                                          )
+                                          .toList(growable: false) ??
+                                      const <Map<String, dynamic>>[];
+                              return _TrackList(
+                                tracks: tracks,
+                                artistId: _selectedArtistId,
+                                onDelete: _deleteTrack,
+                              );
+                            },
                           ),
                         ],
                       ),
@@ -625,33 +639,32 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     final Query<Map<String, dynamic>> query = isFullAdmin
         ? FirebaseFirestore.instance.collection('tracks')
         : FirebaseFirestore.instance
-              .collection('tracks')
-              .where('artistId', isEqualTo: _selectedArtistId);
+            .collection('tracks')
+            .where('artistId', isEqualTo: _selectedArtistId);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
-      builder:
-          (
-            BuildContext context,
-            AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
-          ) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return _kpiLoadingSkeleton(colors);
-            }
-            if (snapshot.hasError || !snapshot.hasData) {
-              return const SizedBox.shrink();
-            }
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+      ) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _kpiLoadingSkeleton(colors);
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
 
-            final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
-                snapshot.data!.docs;
-            final _KpiData kpiData = _computeKpis(
-              docs,
-              isFullAdmin,
-              _artistName,
-            );
+        final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
+            snapshot.data!.docs;
+        final _KpiData kpiData = _computeKpis(
+          docs,
+          isFullAdmin,
+          _artistName,
+        );
 
-            return _KpiGrid(kpiData: kpiData, colors: colors);
-          },
+        return _KpiGrid(kpiData: kpiData, colors: colors);
+      },
     );
   }
 
@@ -681,9 +694,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       final Map<String, dynamic> data = doc.data();
 
       final String? album = data['album'] as String?;
-      final String albumKey = album != null && album.trim().isNotEmpty
-          ? album.trim()
-          : 'Single';
+      final String albumKey =
+          album != null && album.trim().isNotEmpty ? album.trim() : 'Single';
       albums.add(albumKey);
 
       final String? artistId = data['artistId'] as String?;
@@ -845,9 +857,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     return Text(
       title,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        color: colors.onSurface,
-        fontWeight: FontWeight.bold,
-      ),
+            color: colors.onSurface,
+            fontWeight: FontWeight.bold,
+          ),
     );
   }
 }
@@ -871,9 +883,8 @@ class _ArtistDropdown extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(
-          color: disabled
-              ? colors.outline.withValues(alpha: 0.3)
-              : colors.outline,
+          color:
+              disabled ? colors.outline.withValues(alpha: 0.3) : colors.outline,
           width: 1,
         ),
         borderRadius: BorderRadius.circular(12),
@@ -1044,7 +1055,9 @@ class _TrackList extends StatelessWidget {
                     width: 56,
                     height: 56,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => _buildPlaceholder(colors),
+                    errorBuilder: (BuildContext context, Object error,
+                            StackTrace? stackTrace) =>
+                        _buildPlaceholder(colors),
                   ),
                 )
               else
@@ -1057,8 +1070,8 @@ class _TrackList extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1067,8 +1080,8 @@ class _TrackList extends StatelessWidget {
                       Text(
                         album,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant,
-                        ),
+                              color: colors.onSurfaceVariant,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1078,8 +1091,9 @@ class _TrackList extends StatelessWidget {
                       Text(
                         _formatDate(createdAt.toDate()),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colors.onSurfaceVariant.withValues(alpha: 0.6),
-                        ),
+                              color: colors.onSurfaceVariant
+                                  .withValues(alpha: 0.6),
+                            ),
                       ),
                     ],
                   ],
@@ -1310,8 +1324,8 @@ class _StatCard extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
+                        color: colors.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),
@@ -1319,9 +1333,9 @@ class _StatCard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: colors.onSurface,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: colors.onSurface,
+                  ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

@@ -10,6 +10,7 @@ class AdminScreenIds {
 
   static const String login = 'admin_login';
   static const String upload = 'admin_upload';
+  static const String store = 'admin_store';
 }
 
 /// Options d'artistes pour le sélecteur de l'écran d'upload.

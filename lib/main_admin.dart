@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'admin/admin_login_page.dart';
-import 'admin/admin_upload_page.dart';
+import 'admin/admin_store_page.dart';
 import 'firebase_options.dart';
 import 'services/supabase_storage_service.dart';
 
@@ -91,7 +91,8 @@ class AdminApp extends StatelessWidget {
       ],
       routes: {
         '/admin/login': (context) => const AdminLoginPage(),
-        '/admin/upload': (context) => const AdminUploadPage(),
+        '/admin/upload': (context) => const AdminShell(),
+        '/admin/store': (context) => const AdminStorePageOnly(),
       },
       home: const AdminLoginPage(),
     );
