@@ -131,6 +131,33 @@ Se connecter au panneau d'administration, choisir l'artiste dans la barre
 latérale, puis publier. **Aucun import manuel n'est nécessaire** : le filtre
 `artistId` fait le reste.
 
+## Étape 6 bis — La publicité AdMob (obligatoire pour monétiser)
+
+Chaque artiste est une application Android distincte, et **Google AdMob
+interdit de partager des identifiants entre plusieurs applications** : un
+compte qui sert deux apps peut être désactivé, avec suppression des revenus.
+
+Il faut donc **un compte AdMob par artiste**. Ce n'est pas technique : il faut
+créer le compte sur [admob.google.com](https://admob.google.com) avec l'identité
+de l'artiste (ou du label), puis y déclarer l'application avec son
+`applicationId` exact (`com.music.mon_artiste`).
+
+Une fois les trois identifiants obtenus, les renseigner dans `.env` :
+
+```dotenv
+# Identifiants AdMob — un compte par artiste, ne jamais partager.
+ADMOB_APP_ID=ca-app-pub-1234567890123456~9876543210987654
+ADMOB_BANNER_ID=ca-app-pub-1234567890123456/1111111111
+ADMOB_INTERSTITIAL_ID=ca-app-pub-1234567890123456/2222222222
+```
+
+`scripts/build_apk.ps1` les transmet au build et affiche leur état. Le build
+**fonctionne sans eux** : la publicité est simplement désactivée, ce qui permet
+de livrer un artiste sans monétisation.
+
+Aucun code à modifier : `AdsConfig` (`lib/app/config/ads_config.dart`) lit ces
+valeurs, et la bannière s'insère seule dans la coquille.
+
 ## Récapitulatif
 
 | # | Fichier / lieu | Action | Requis |
@@ -142,6 +169,7 @@ latérale, puis publier. **Aucun import manuel n'est nécessaire** : le filtre
 | 5 | `assets/catalog/catalog.json` | Entrées `artistId` | Si hors-ligne |
 | 6 | `admin_users/{uid}` (console) | Document rôle | Pour publier |
 | 7 | `.env` / script de build | `-ArtistId` | ✅ |
+| 8 | Compte AdMob de l'artiste | `ADMOB_*` dans `.env` | Pour monétiser |
 
 Ni règle Firestore, ni index, ni écran à modifier.
 
@@ -153,3 +181,5 @@ Ni règle Firestore, ni index, ni écran à modifier.
 - [ ] `aapt2 dump packagename` confirme `com.music.mon_artiste`
 - [ ] Un titre publié depuis le panneau apparaît dans l'application
 - [ ] Le catalogue n'affiche **aucun** titre d'un autre artiste
+- [ ] Les `ADMOB_*` correspondent au compte AdMob de cet artiste, pas à celui
+      d'un autre (vérifier l'origine des identifiants avant livraison)

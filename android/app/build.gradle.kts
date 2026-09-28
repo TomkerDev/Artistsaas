@@ -25,6 +25,12 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.tomker.artistsaas"
+        // Identifiant AdMob Android, lu depuis `key.properties` ou l'environnement.
+        // Doit rester vide tant que l'artiste n'a pas de compte AdMob : le SDK
+        // démarre alors sans publicité (cf. AdsConfig.adsEnabled). Chaque artiste
+        // dispose de son propre compte, donc de sa propre valeur.
+        manifestPlaceholders["ADMOB_APP_ID"] =
+            System.getenv("ADMOB_APP_ID") ?: ""
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Figé explicitement (Android 7.0) : la valeur par défaut de Flutter peut

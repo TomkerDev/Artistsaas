@@ -195,6 +195,34 @@ reste ainsi distinguable d'un catalogue vide.
 
 Les concerts passés sont masqués côté client ; ceux dont la date est inconnue sont
 conservés, l'organisateur n'ayant pas encore fixé la date.
+Les concerts passés sont masqués côté client ; ceux dont la date est inconnue sont
+conservés, l'organisateur n'ayant pas encore fixé la date.
+
+## Publicité (AdMob)
+
+La publicité est pilotée par `google_mobile_ads` et s'appuie sur trois
+identifiants injectés à la compilation (`--dart-define`, relayés par
+`scripts/build_apk.ps1` depuis `.env`) : `ADMOB_APP_ID`, `ADMOB_BANNER_ID` et
+`ADMOB_INTERSTITIAL_ID`. `AdsConfig` (`lib/app/config/ads_config.dart`) les
+expose et décide si la publicité est active.
+
+Points structurants :
+
+- **un compte AdMob par artiste.** Les douze applications sont des apps
+  distinctes ; partager des identifiants viole les règles Google et expose à
+  la désactivation du compte. Le manifeste déclare donc
+  `com.google.android.gms.ads.APPLICATION_ID` via un `manifestPlaceholder`
+  propre à chaque build (`android/app/build.gradle.kts`).
+- **la publicité est facultative.** Sans identifiant valide, `adsEnabled` vaut
+  `false` : `AdBanner` se rend invisible, `AdsService.initialize()` ne fait
+  rien. Un build sans monétisation reste livrable.
+- **en debug, repli sur les identifiants de test de Google**, ce qui permet
+  d'exercer le vrai chemin de code sans compte ni revenu.
+- la bannière est insérée dans la colonne de `HomeShell`, entre le
+  mini-lecteur et la barre d'onglets ; elle réserve sa place uniquement une
+  fois l'annonce chargée, pour éviter tout rechargement de mise en page.
+- `AdsService` gère l'interstitiel : chargement anticipé, cadence minimale de
+  deux minutes entre deux affichages, et libération de l'annonce à la fermeture.
 
 ## Assets et contenu embarqué
 

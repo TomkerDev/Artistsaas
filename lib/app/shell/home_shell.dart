@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/constants/app_strings.dart';
+import '../../features/ads/presentation/ad_banner.dart';
 import '../../features/catalog/presentation/home_screen.dart';
 import '../../features/library/presentation/my_music_screen.dart';
 import '../../features/player/presentation/player_screen.dart';
@@ -82,6 +83,10 @@ class _HomeShellState extends State<HomeShell> {
             // Le mini-lecteur est masqué sur l'onglet Lecteur : le lecteur complet
             // joue déjà ce rôle, un doublon visuel serait redondant.
             if (_selectedIndex != 1) const MiniPlayer(),
+            // Bannière publicitaire, entre le contenu et la barre d'onglets.
+            // Le composant se rend invisible si la publicité est désactivée sur
+            // ce build (pas d'identifiants AdMob injectés).
+            const AdBanner(),
           ],
         ),
         bottomNavigationBar: NavigationBar(

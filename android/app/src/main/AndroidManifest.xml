@@ -56,6 +56,12 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON"/>
             </intent-filter>
         </receiver>
+        <!-- Identifiant de l'application AdMob Android. Doit être déclaré par
+             chaque flavor : le SDK refuse de démarrer sans lui. Sans valeur, le
+             build démarre sans publicité (AdsConfig.adsEnabled == false). -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${ADMOB_APP_ID}"/>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

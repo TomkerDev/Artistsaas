@@ -102,6 +102,24 @@ $defines = @(
     "--dart-define=STREAM_ONLY=$streamOnlyValue"
 )
 
+# --- Publicité (AdMob) ------------------------------------------------------
+# Les identifiants ne sont pas secrets : ce sont des valeurs publiques, mais
+# propres à chaque artiste. Elles voyagent donc par variable d'environnement,
+# ce qui permet aussi à Gradle de lire ADMOB_APP_ID pour le manifest.
+$admobAppId        = Get-Config 'ADMOB_APP_ID'
+$admobBannerId     = Get-Config 'ADMOB_BANNER_ID'
+$admobInterstitial = Get-Config 'ADMOB_INTERSTITIAL_ID'
+
+if ($admobAppId) {
+    $env:ADMOB_APP_ID = $admobAppId
+}
+if ($admobBannerId) {
+    $defines += "--dart-define=ADMOB_BANNER_ID=$admobBannerId"
+}
+if ($admobInterstitial) {
+    $defines += "--dart-define=ADMOB_INTERSTITIAL_ID=$admobInterstitial"
+}
+
 $missing = @()
 foreach ($name in $secrets) {
     $value = Get-Config $name
@@ -119,6 +137,17 @@ Write-Host "  artistId      : $ArtistId"
 Write-Host "  artistFolder  : $ArtistFolder"
 Write-Host "  streamOnly    : $streamOnlyValue"
 Write-Host "  secrets       : $($secrets.Count - $missing.Count)/$($secrets.Count) renseignés"
+$admobBannerState = if ($admobBannerId) { 'oui' } else { 'non' }
+$admobInterState = if ($admobInterstitial) { 'oui' } else { 'non' }
+Write-Host "  admob appId   : $(if ($admobAppId) { 'oui' } else { 'non' })"
+Write-Host "  admob banner  : $admobBannerState"
+Write-Host "  admob interst.: $admobInterState"
+
+if (-not $admobAppId) {
+    Write-Warning 'Pas de ADMOB_APP_ID : le build fonctionnera, sans publicité.'
+    Write-Warning 'Chaque artiste doit disposer de son propre compte AdMob (cf.'
+    Write-Warning 'docs/ONBOARDING_ARTISTE.md) ; partager des IDs est interdit.'
+}
 
 if ($missing.Count -gt 0) {
     Write-Warning "Variables absentes : $($missing -join ', ')"

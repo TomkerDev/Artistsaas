@@ -6,6 +6,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'app/artist_app.dart';
+import 'features/ads/services/ads_service.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
@@ -37,6 +38,10 @@ Future<void> main() async {
     // que la notification de l'écran de verrouillage disparaisse sans attendre.
     androidStopForegroundOnPause: true,
   );
+  // Google Mobile Ads. Sans identifiants injectés, l'initialisation est un
+  // no-op : un build de développement démarre sans annonce.
+  await AdsService.initialize();
+
   // `ProviderScope` héberge le conteneur d'injection de dépendances. Les
   // implémentations concrètes (catalogue, moteur audio, téléchargements) y sont
   // déclarées à partir de l'étape 1, dans `lib/app/di/`.
