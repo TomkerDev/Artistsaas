@@ -30,6 +30,7 @@ Track buildTrack({
   String? coverAsset,
   Uri? audioUrl,
   String? audioAssetPath,
+  String? label,
   bool isDownloadable = true,
   bool isNew = false,
   bool isDownloaded = false,
@@ -45,6 +46,7 @@ Track buildTrack({
     coverAsset: coverAsset,
     audioUrl: audioUrl,
     audioAssetPath: audioAssetPath ?? 'assets/audio/$id.wav',
+    label: label,
     isDownloadable: isDownloadable,
     isNew: isNew,
     isDownloaded: isDownloaded,
@@ -55,7 +57,7 @@ Track buildTrack({
 /// comptage des lectures pour vérifier la mise en cache.
 final class FakeCatalogDataSource implements CatalogDataSource {
   FakeCatalogDataSource({List<Track>? tracks, this.failure})
-    : tracks = tracks ?? const <Track>[];
+      : tracks = tracks ?? const <Track>[];
 
   /// Nombre de lectures demandées à la source.
   int fetchCount = 0;
@@ -84,7 +86,7 @@ final class FakeCatalogDataSource implements CatalogDataSource {
 /// peut donc surcharger l'un ou l'autre provider sans changement.
 final class FakeMusicRepository implements MusicRepository, TrackRepository {
   FakeMusicRepository({List<Track>? tracks, this.failure})
-    : tracks = tracks ?? const <Track>[];
+      : tracks = tracks ?? const <Track>[];
 
   /// Nombre d'appels reçus.
   int callCount = 0;

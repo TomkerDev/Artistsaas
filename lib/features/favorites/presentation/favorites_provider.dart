@@ -10,8 +10,9 @@ import '../domain/repositories/favorite_repository.dart';
 /// Contrôleur Riverpod des favoris : état observé par l'interface et commandes
 /// pour ajouter / retirer un favori.
 final AsyncNotifierProvider<FavoritesNotifier, List<Favorite>>
-favoritesNotifierProvider = AsyncNotifierProvider<FavoritesNotifier,
-    List<Favorite>>(FavoritesNotifier.new);
+    favoritesNotifierProvider =
+    AsyncNotifierProvider<FavoritesNotifier, List<Favorite>>(
+        FavoritesNotifier.new);
 
 /// Identifiants des pistes favorisées, dérivés de l'état asynchrone pour un
 /// accès synchrone O(1) depuis l'interface (lecteur, catalogue).
@@ -33,8 +34,7 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
   /// Chargement initial : récupère les favoris du stockage.
   @override
   Future<List<Favorite>> build() async {
-    final FavoriteRepository repository =
-        ref.watch(favoriteRepositoryProvider);
+    final FavoriteRepository repository = ref.watch(favoriteRepositoryProvider);
     final List<Favorite> favorites = await repository.getFavorites();
     _favoriteIds.clear();
     for (final Favorite favorite in favorites) {
@@ -48,21 +48,19 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
 
   /// Ajoute ou retire une piste des favoris.
   Future<void> toggleFavorite(String trackId) async {
-    final FavoriteRepository repository =
-        ref.read(favoriteRepositoryProvider);
+    final FavoriteRepository repository = ref.read(favoriteRepositoryProvider);
 
     if (_favoriteIds.contains(trackId)) {
       await repository.removeFavorite(trackId);
       _favoriteIds.remove(trackId);
       state = state.when(
         data: (List<Favorite> data) {
-          final List<Favorite> filtered = data
-              .where((Favorite f) => f.trackId != trackId)
-              .toList();
+          final List<Favorite> filtered =
+              data.where((Favorite f) => f.trackId != trackId).toList();
           return AsyncData(filtered);
         },
         loading: () => const AsyncData(<Favorite>[]),
-        error: (_, _) => const AsyncData(<Favorite>[]),
+        error: (_, __) => const AsyncData(<Favorite>[]),
       );
     } else {
       await repository.addFavorite(trackId);
@@ -78,7 +76,7 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
           return AsyncData(updated);
         },
         loading: () => AsyncData(<Favorite>[newFavorite]),
-        error: (_, _) => AsyncData(<Favorite>[newFavorite]),
+        error: (_, __) => AsyncData(<Favorite>[newFavorite]),
       );
     }
   }
@@ -103,7 +101,7 @@ class FavoriteButton extends ConsumerWidget {
           data: (List<Favorite> favorites) =>
               favorites.any((Favorite f) => f.trackId == trackId),
           loading: () => false,
-          error: (_, _) => false,
+          error: (_, __) => false,
         );
 
     return IconButton(
@@ -150,4 +148,3 @@ class ShareButton extends ConsumerWidget {
     );
   }
 }
-

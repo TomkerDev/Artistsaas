@@ -116,6 +116,8 @@ Aucune clé n'est versionnée : Firebase et Supabase sont injectés par
 | `FIREBASE_STORAGE_BUCKET` | `<projet>.firebasestorage.app` |
 | `SUPABASE_URL` | `https://<ref>.supabase.co` |
 | `SUPABASE_ANON_KEY` | clé publique (`anon`) du projet Supabase |
+| `ARTIST_ID` | identifiant Firestore de l'artiste (`jethsonat`, `dilson_le_mustang`, …) ; déduit de `ARTIST_FOLDER` si absent |
+| `ARTIST_FOLDER` | dossier d'assets de l'artiste (`artist_1`, …) ; `artist_1` par défaut |
 
 > ⚠️ `String.fromEnvironment()` n'est substitué par le compilateur **que dans un
 > contexte `const`**. Déclarez toujours `static const String x =
@@ -155,18 +157,48 @@ rewrites** — d'où la règle explicite sur `/` en plus de `/index.html`.
 #### Indicateurs clés de performance (KPI)
 
 Le panneau affiche **4 cartes KPI** en temps réel en haut de la page
-d'upload (`admin_upload_page.dart`) :
+d'upload (`admin_upload_page.dart`), pour l'artiste courant :
 
 - **Titres en ligne** — nombre total de morceaux publiés (Firestore `tracks`)
 - **Albums & Singles** — nombre d'albums/singles distincts
-- **Artiste / Total Artistes** — nom de l'artiste (rôle `artist`) ou
-  total d'artistes (rôle `agency_admin` global)
+- **Artiste** — nom de scène de l'artiste filtré
 - **Dernier Ajout** — titre + date du morceau le plus récemment publié
 
-Les données sont écoutées via un `StreamBuilder` sur la collection `tracks` :
-filtrée par `artistId` si le rôle est `artist`, ou complète si le rôle est
-`agency_admin` avec `assignedArtistId == 'all'`. Un squelette de chargement
-apparaît pendant l'attente du premier snapshot.
+Les données sont écoutées via un `StreamBuilder` sur la collection `tracks`,
+**toujours filtré par `artistId`**. Un squelette de chargement apparaît pendant
+l'attente du premier snapshot.
+
+Le **Dashboard** (première entrée de la barre latérale) complète ces chiffres
+avec une vue par artiste : morceaux publiés, albums, écoutes cumulées et
+fichiers audio, chacun filtrable par les puces d'artistes.
+
+#### Filtrage par artiste
+
+La liste d'administration, les KPI et les téléversements Supabase s'appuient
+tous sur `_effectiveArtistId` :
+
+- rôle **`artist`** : verrouillé sur `assignedArtistId` (`jethsonat`,
+  `dilson_le_mustang`, …). Le sélecteur est désactivé et la requête Firestore
+  ne peut pas sortir de ce périmètre, même si la sélection changeait ;
+- rôle **`agency_admin`** : la liste déroulante est active et la bascule entre
+  artistes recalcule immédiatement la requête.
+
+Le document publié porte le schéma suivant :
+
+| Champ | Type | Rôle |
+| --- | --- | --- |
+| `title` | `string` | titre du morceau |
+| `artist` | `string` | nom de scène |
+| `artistId` | `string` | identifiant de l'artiste (`jethsonat`) |
+| `label` | `string` | label partenaire (`Tete Roh Studio`) |
+| `audioUrl` / `audio_url` | `string` | MP3 en streaming (Supabase Storage) |
+| `imageUrl` / `cover_url` | `string` | pochette |
+| `duration_ms` | `int` | durée en millisecondes |
+| `is_new` | `bool` | marqueur de nouveauté |
+| `created_at` / `createdAt` | `timestamp` | horodatage de publication |
+
+Le client mobile accepte les deux conventions de nommage afin de lire aussi
+bien les documents historiques que les nouveaux.
 
 ### Applications artistes (Android)
 
@@ -174,14 +206,82 @@ Une application par artiste : même base de code, identité choisie par le flavo
 (`applicationId`, nom affiché, icône).
 
 ```powershell
-flutter build apk --flavor dilson_le_mustang -t lib/main.dart --release --no-tree-shake-icons
-flutter build apk --flavor jethsonat        -t lib/main.dart --release --no-tree-shake-icons
+# Une fois : copier le modèle et le remplir.
+copy .env.example .env
+
+# Jethsonat (label Tete Roh Studio, 100 % audio)
+powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1 `
+  -Flavor jethsonat -ArtistId jethsonat -ArtistFolder artist_2
 ```
 
-Sortie : `build/app/outputs/flutter-apk/app-<flavor>-release.apk` (≈ 55 Mo,
-ABI `arm64-v8a`, `armeabi-v7a` et `x86_64`, `targetSdk 36`). Le contenu embarqué
-étant partagé, aucun `--dart-define` n'est requis pour un APK : l'identité vient
-du flavor et le catalogue distant de Firestore.
+Le script lit les secrets dans `.env` (ou dans les variables du processus, en
+CI), construit la commande complète, ajoute `--no-tree-shake-icons`
+(obligatoire ici, cf. « Pièges connus ») et recopie l'APK dans
+`releases/<flavor>/`. Équivalent manuel :
+
+```powershell
+flutter build apk --release --flavor jethsonat --no-tree-shake-icons `
+  --dart-define=ARTIST_ID=jethsonat `
+  --dart-define=ARTIST_FOLDER=artist_2 `
+  --dart-define=STREAM_ONLY=true `
+  --dart-define=FIREBASE_API_KEY=... `
+  --dart-define=FIREBASE_PROJECT_ID=novaa-music-tchaddd `
+  --dart-define=SUPABASE_URL=https://<ref>.supabase.co `
+  --dart-define=SUPABASE_ANON_KEY=...
+```
+
+> 🔒 `.env`, `releases/` et les `*.apk` sont ignorés par git : ne jamais
+> versionner les clés Supabase/Firebase ni les binaires.
+
+#### Application « 100 % audio » (`STREAM_ONLY=true`)
+
+Jethsonat n'embarque **aucun MP3** : tout est lu en streaming depuis
+Firestore/Supabase. Le drapeau `STREAM_ONLY` neutralise alors le
+`assets/catalog/catalog.json`, qui est **partagé** entre toutes les
+applications et contient donc des titres d'autres artistes (démo, Dilson) —
+sans ce drapeau, l'application de Jethsonat afficherait un catalogue mêlé.
+
+Conséquence associée : Firestore devient la source *unique*. Une erreur réseau
+n'est donc plus absorbée en silence, elle remonte à l'écran d'accueil qui
+propose « Réessayer » — plutôt que d'afficher un catalogue vide inexpliqué.
+
+### Identité des artistes (`lib/core/constants/artist_config.dart`)
+
+Ce fichier est la **source de vérité unique** de l'identité d'un artiste :
+nom de scène, nom civil, label, univers, biographie, distinction, pochette de
+header et liens officiels. `AppConfig.artist` y résout l'artiste courant, et le
+panneau d'administration dérive son sélecteur de la même source — ajouter un
+artiste ne demande donc **aucune modification d'écran**.
+
+| `id` | Nom de scène | Label | Pochette |
+| --- | --- | --- | --- |
+| `jethsonat` | Jethsonat (Jethro Badjim Berdi) | Tete Roh Studio | `assets/covers/jethsonat_cover.png` |
+| `dilson_le_mustang` | Dilson Le Mustang | Tete Roh Studio | `assets/covers/dilson_cover.png` |
+
+La mention « Produced & Distributed by **Tete Roh Studio** » est dérivée
+automatiquement du champ `label` (`ArtistProfile.productionCredit`) et s'affiche
+sur le header, le lecteur et chaque fiche de morceau.
+
+#### Remplacer la pochette par le visuel officiel
+
+Le fichier `assets/covers/jethsonat_cover.png` est un **placeholder généré**
+(voir `tool/generate_brand_assets.dart`). Pour le visuel officiel :
+
+1. déposer l'image dans `assets/covers/` ;
+2. conserver le nom `jethsonat_cover.png` (le chemin est déclaré dans
+   `ArtistProfile.coverAsset`) — le remplacer directement est le plus simple ;
+3. si un autre nom est préféré, le reporter dans `artist_config.dart` puis
+   lancer `flutter pub get` : le regroupement d'assets est résolu à la
+   compilation ;
+4. reconstruire l'APK (l'illustration du header fait partie du bundle).
+
+> `pubspec.yaml` déclare le **dossier** `assets/covers/`, pas le fichier : un
+> simple dépôt d'image est pris en compte au prochain build, sans
+> modification du `pubspec`.
+
+Sortie : `build/app/outputs/flutter-apk/app-<flavor>-release.apk` (≈ 72 Mo,
+ABI `arm64-v8a`, `armeabi-v7a` et `x86_64`, `targetSdk 36`). Vérifié pour le
+flavor `jethsonat` : l'identifiant produit est `com.music.jethsonat`.
 
 > Les APK vivent sous `build/`, que `flutter clean` efface : **copiez-les hors
 > de `build/`** dès qu'ils sont produits.

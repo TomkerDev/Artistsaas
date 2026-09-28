@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/constants/artist_config.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../library/domain/entities/download_progress.dart';
 import '../../library/presentation/downloads_providers.dart';
@@ -40,8 +42,9 @@ class HomeScreen extends ConsumerWidget {
             tooltip: 'Partager l\'application',
             onPressed: () {
               Share.share(
-                'Découvre l\'application officielle de Dilson Le Mustang '
-                'sur Novaa ! Écoute tous ses titres en exclusivité : '
+                'Découvre l\'application officielle de '
+                '${AppConfig.artist.stageName} ! Écoute tous ses titres en '
+                'exclusivité et reste informé de ses sorties : '
                 'https://novaa-music-tchaddd.web.app',
               );
             },
@@ -72,7 +75,7 @@ class _TrackList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final Map<String, DownloadProgress> progress =
         ref.watch(downloadProgressProvider).value ??
-        const <String, DownloadProgress>{};
+            const <String, DownloadProgress>{};
     final String? currentTrackId = ref.watch(
       playbackControllerProvider.select(
         (PlaybackState state) => state.currentMedia?.trackId,
@@ -199,9 +202,8 @@ class _CatalogErrorView extends StatelessWidget {
     // Le message technique reste dans les logs ; l'utilisateur voit le message
     // métier lorsqu'il existe, un texte générique sinon.
     final Object raised = error;
-    final String message = raised is AppException
-        ? raised.message
-        : AppStrings.homeErrorGeneric;
+    final String message =
+        raised is AppException ? raised.message : AppStrings.homeErrorGeneric;
 
     return Center(
       child: Padding(
@@ -244,6 +246,8 @@ class _CatalogHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ArtistProfile artist = AppConfig.artist;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: LayoutBuilder(
@@ -286,27 +290,44 @@ class _CatalogHero extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.fromLTRB(20, 20, 20, 18),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
                     child: Align(
                       alignment: Alignment.bottomLeft,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          _CompilationBadge(),
-                          SizedBox(height: 10),
+                          _CompilationBadge(label: artist.universe),
+                          const SizedBox(height: 10),
                           Text(
-                            'Dilson Le Mustang',
+                            artist.stageName,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 26,
                               height: 1.1,
                               fontWeight: FontWeight.w800,
                               shadows: <Shadow>[
                                 Shadow(color: Colors.black54, blurRadius: 4),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          // Crédit du label partenaire, visible sur la fiche
+                          // de l'artiste dès l'accueil.
+                          Text(
+                            artist.productionCredit,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              shadows: <Shadow>[
+                                const Shadow(
+                                    color: Colors.black54, blurRadius: 4),
                               ],
                             ),
                           ),
@@ -324,7 +345,11 @@ class _CatalogHero extends StatelessWidget {
   }
 }
 
-/// Pochette distante prioritaire, avec repli sur l'asset embarqué.
+/// Pochette officielle de l'artiste (header), avec repli sur l'asset embarqué.
+///
+/// L'ordre de priorité est : URL distante fournie par Firestore pour le premier
+/// morceau du catalogue, pochette officielle déclarée dans le registre des
+/// artistes, puis visuel de remplacement.
 class _HeroImage extends StatelessWidget {
   const _HeroImage({this.coverUrl});
 
@@ -332,10 +357,9 @@ class _HeroImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const String localCover = 'assets/covers/dilson_cover.png';
+    final String localCover = AppConfig.coverAsset;
     final String? remoteCover = coverUrl;
-    final bool hasRemoteCover =
-        remoteCover != null &&
+    final bool hasRemoteCover = remoteCover != null &&
         remoteCover.trim().isNotEmpty &&
         remoteCover.startsWith('http');
 
@@ -346,10 +370,10 @@ class _HeroImage extends StatelessWidget {
         errorBuilder:
             (BuildContext context, Object error, StackTrace? stackTrace) =>
                 Image.asset(
-                  localCover,
-                  fit: BoxFit.cover,
-                  errorBuilder: _fallbackBuilder,
-                ),
+          localCover,
+          fit: BoxFit.cover,
+          errorBuilder: _fallbackBuilder,
+        ),
         loadingBuilder:
             (BuildContext context, Widget child, ImageChunkEvent? progress) =>
                 progress == null ? child : const _HeroFallback(),
@@ -386,8 +410,11 @@ class _HeroFallback extends StatelessWidget {
   }
 }
 
+/// Pastille d'univers musical (« Sec Sec 🌾🔥 ») affichée sur le header.
 class _CompilationBadge extends StatelessWidget {
-  const _CompilationBadge();
+  const _CompilationBadge({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -397,11 +424,11 @@ class _CompilationBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(100),
         border: Border.all(color: Colors.white.withValues(alpha: 0.45)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
         child: Text(
-          'Compil Officielles',
-          style: TextStyle(
+          label,
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 12,
             fontWeight: FontWeight.w700,

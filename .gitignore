@@ -33,6 +33,19 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Secrets de compilation (clés Firebase / Supabase).
+# Seul `.env.example` est versionné : le `.env` réel ne doit jamais l'être.
+.env
+.env.local
+
+# APK et AAB produits par `scripts/build_apk.ps1`.
+# Le dossier `build/` est déjà ignoré et effacé par `flutter clean` ; cette
+# entrée protège les copies déposées dans `releases/`, qui pèsent ~70 Mo.
+/releases/
+*.apk
+*.aab
+*.ipa
+
 # Symbolication related
 app.*.symbols
 

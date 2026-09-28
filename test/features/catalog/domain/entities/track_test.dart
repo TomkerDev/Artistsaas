@@ -3,25 +3,93 @@ import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('Track.fromJson — schéma Firestore', () {
+    test('lit le document publié par le panneau (champs camelCase)', () {
+      final Track track = Track.fromJson(<String, dynamic>{
+        'id': 'jethsonat-sec-sec',
+        'title': 'Sec Sec',
+        'artist': 'Jethsonat',
+        'artistId': 'jethsonat',
+        'label': 'Tete Roh Studio',
+        'duration_ms': 210000,
+        'audioUrl': 'https://bucket.supabase.co/jethsonat/sec_sec.mp3',
+        'imageUrl': 'https://bucket.supabase.co/jethsonat/cover.png',
+        'is_new': true,
+        'created_at': 1767225600000,
+      });
+
+      expect(track.id, 'jethsonat-sec-sec');
+      expect(track.title, 'Sec Sec');
+      expect(track.artistName, 'Jethsonat');
+      expect(track.label, 'Tete Roh Studio');
+      expect(track.duration, const Duration(milliseconds: 210000));
+      expect(track.isNew, isTrue);
+      expect(track.hasRemoteSource, isTrue);
+      expect(
+        track.audioUrl,
+        Uri.parse('https://bucket.supabase.co/jethsonat/sec_sec.mp3'),
+      );
+      expect(track.coverUrl, 'https://bucket.supabase.co/jethsonat/cover.png');
+    });
+
+    test('accepte aussi la convention snake_case historique', () {
+      final Track track = Track.fromJson(<String, dynamic>{
+        'id': 'ancien',
+        'title': 'Ancien titre',
+        'artist': 'Jethsonat',
+        'duration_ms': 1000,
+        'audio_url': 'https://bucket.supabase.co/a.mp3',
+        'cover_url': 'https://bucket.supabase.co/a.png',
+      });
+
+      expect(track.hasRemoteSource, isTrue);
+      expect(track.coverUrl, 'https://bucket.supabase.co/a.png');
+    });
+
+    test('exige une source audio, quelle que soit la convention', () {
+      expect(
+        () => Track.fromJson(<String, dynamic>{
+          'id': 'sans-source',
+          'title': 'Sans source',
+          'artist': 'Jethsonat',
+          'duration_ms': 1000,
+        }),
+        throwsA(isA<CatalogException>()),
+      );
+    });
+
+    test('reporte le label dans toJson', () {
+      const Track track = Track(
+        id: 'a',
+        title: 'T',
+        artistName: 'Jethsonat',
+        duration: Duration(seconds: 1),
+        label: 'Tete Roh Studio',
+      );
+
+      expect(track.toJson()['label'], 'Tete Roh Studio');
+    });
+  });
+
   Map<String, dynamic> minimalJson() => <String, dynamic>{
-    'id': 'single-001',
-    'title': 'Premier titre',
-    'artist': 'Nom de scène',
-    'duration_ms': 213000,
-    'audio_asset': 'assets/audio/single-001.mp3',
-  };
+        'id': 'single-001',
+        'title': 'Premier titre',
+        'artist': 'Nom de scène',
+        'duration_ms': 213000,
+        'audio_asset': 'assets/audio/single-001.mp3',
+      };
 
   Map<String, dynamic> completeJson() => <String, dynamic>{
-    ...minimalJson(),
-    'album': 'EP 2026',
-    'track_number': 2,
-    'release_year': 2026,
-    'cover_asset': 'assets/images/covers/single-001.jpg',
-    'audio_url': 'https://exemple.test/single-001.mp3',
-    'is_downloadable': false,
-    'is_new': true,
-    'is_downloaded': true,
-  };
+        ...minimalJson(),
+        'album': 'EP 2026',
+        'track_number': 2,
+        'release_year': 2026,
+        'cover_asset': 'assets/images/covers/single-001.jpg',
+        'audio_url': 'https://exemple.test/single-001.mp3',
+        'is_downloadable': false,
+        'is_new': true,
+        'is_downloaded': true,
+      };
 
   group('Track.fromJson', () {
     test('applique les valeurs par défaut des champs facultatifs', () {

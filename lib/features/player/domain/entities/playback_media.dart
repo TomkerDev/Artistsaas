@@ -13,6 +13,7 @@ class PlaybackMedia {
     required this.source,
     this.artAsset,
     this.coverUrl,
+    this.label,
   });
 
   /// Identifiant de la piste d'origine.
@@ -34,6 +35,10 @@ class PlaybackMedia {
   /// `null` ou valide → priorité sur [artAsset] lors de l'affichage.
   final String? coverUrl;
 
+  /// Label ayant produit et distribué le morceau, crédité sous le nom de
+  /// l'artiste. `null` si le morceau n'en porte pas.
+  final String? label;
+
   @override
   bool operator ==(Object other) {
     return other is PlaybackMedia &&
@@ -42,12 +47,20 @@ class PlaybackMedia {
         other.artist == artist &&
         other.source == source &&
         other.artAsset == artAsset &&
-        other.coverUrl == coverUrl;
+        other.coverUrl == coverUrl &&
+        other.label == label;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(trackId, title, artist, source, artAsset, coverUrl);
+  int get hashCode => Object.hash(
+        trackId,
+        title,
+        artist,
+        source,
+        artAsset,
+        coverUrl,
+        label,
+      );
 
   @override
   String toString() => 'PlaybackMedia($trackId, « $title »)';

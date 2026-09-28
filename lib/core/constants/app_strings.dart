@@ -40,6 +40,9 @@ abstract final class AppStrings {
   // Actions de lecture.
   static const String playAction = 'Lire';
   static const String pauseAction = 'Pause';
+
+  /// Arrêt complet du flux : coupe l'audio et retire la notification média.
+  static const String stopAudioAction = 'Arrêter la lecture';
   static const String previousAction = 'Morceau précédent';
   static const String nextAction = 'Morceau suivant';
   static const String shuffleOnAction = 'Aléatoire activé';

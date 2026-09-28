@@ -8,7 +8,8 @@ import '../../../../helpers/fakes.dart';
 
 /// Source distante pilotée par le test : nouveautés publiées après le build.
 final class _FakeRemoteCatalogDataSource implements RemoteCatalogDataSource {
-  _FakeRemoteCatalogDataSource({this.newTracks = const <Track>[], this.failure});
+  _FakeRemoteCatalogDataSource(
+      {this.newTracks = const <Track>[], this.failure});
 
   List<Track> newTracks;
   Object? failure;
@@ -28,6 +29,7 @@ TrackRepositoryImpl repositoryWith(
   List<Track> newTracks = const <Track>[],
   Object? remoteFailure,
   FakeDownloadRepository? downloads,
+  bool? streamOnly,
 }) {
   return TrackRepositoryImpl(
     local: local,
@@ -37,6 +39,7 @@ TrackRepositoryImpl repositoryWith(
     ),
     downloads: downloads ?? FakeDownloadRepository(),
     artistId: 'artist_test',
+    streamOnly: streamOnly,
   );
 }
 
@@ -54,7 +57,8 @@ void main() {
       expect(tracks.last.id, 'b');
     });
 
-    test('ne lit le catalogue embarqué qu\'une seule fois (mise en cache)', () async {
+    test('ne lit le catalogue embarqué qu\'une seule fois (mise en cache)',
+        () async {
       final FakeCatalogDataSource source = FakeCatalogDataSource(
         tracks: <Track>[buildTrack()],
       );
@@ -176,5 +180,70 @@ void main() {
       expect(source.fetchCount, 2);
     });
   });
-}
 
+  // Application « 100 % audio » (Jethsonat) : le catalogue embarqué est
+  // ignoré, Firestore est la source unique du catalogue.
+  group('TrackRepositoryImpl — mode 100 % audio', () {
+    test('ignore le catalogue embarqué et ne lit que Firestore', () async {
+      final FakeCatalogDataSource source = FakeCatalogDataSource(
+        tracks: <Track>[
+          buildTrack(id: 'demo-01', title: 'Nuit blanche', artistName: 'NOVAA'),
+        ],
+      );
+
+      final List<Track> tracks = await repositoryWith(
+        source,
+        streamOnly: true,
+        newTracks: <Track>[
+          buildTrack(
+            id: 'jethsonat-01',
+            title: 'Sec Sec',
+            artistName: 'Jethsonat',
+            label: 'Tete Roh Studio',
+            isNew: true,
+          ),
+        ],
+      ).getTracks();
+
+      // Le morceau d'un autre artiste (issu du catalog.json partagé) ne doit
+      // jamais apparaître dans l'application de Jethsonat.
+      expect(tracks, hasLength(1));
+      expect(tracks.single.id, 'jethsonat-01');
+      expect(tracks.single.label, 'Tete Roh Studio');
+      expect(source.fetchCount, 0);
+    });
+
+    test('remonte l\'erreur distante au lieu d\'afficher un catalogue vide',
+        () async {
+      final FakeCatalogDataSource source = FakeCatalogDataSource(
+        tracks: <Track>[buildTrack(id: 'demo-01')],
+      );
+
+      await expectLater(
+        repositoryWith(
+          source,
+          streamOnly: true,
+          remoteFailure: const CatalogException('Firestore injoignable'),
+        ).getTracks(),
+        throwsA(isA<CatalogException>()),
+      );
+    });
+
+    test('conserve la fusion lorsque le catalogue embarqué est actif',
+        () async {
+      final FakeCatalogDataSource source = FakeCatalogDataSource(
+        tracks: <Track>[buildTrack(id: 'embarque')],
+      );
+
+      final List<Track> tracks = await repositoryWith(
+        source,
+        streamOnly: false,
+        newTracks: <Track>[buildTrack(id: 'distant', isNew: true)],
+      ).getTracks();
+
+      expect(tracks, hasLength(2));
+      expect(tracks.first.id, 'distant');
+      expect(source.fetchCount, 1);
+    });
+  });
+}

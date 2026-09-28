@@ -15,6 +15,13 @@ import '../../../../core/errors/app_exception.dart';
 /// `is_downloadable`, `is_new`, `is_downloaded` sont facultatives
 /// (`is_downloadable` vaut `true` par défaut, `is_new` et `is_downloaded`
 /// valent `false`).
+///
+/// **Conformité Firestore** : les documents `tracks` publiés par le panneau
+/// d'administration portent `title`, `artist`, `artistId`, `label`,
+/// `audioUrl`, `imageUrl`, `duration_ms`, `is_new` et `created_at`. Les
+/// dénominations « Dart » (`audioUrl`, `imageUrl`) et « snake_case »
+/// (`audio_url`, `cover_url`) sont toutes deux acceptées ici, afin que le
+/// client lise indifféremment les documents historiques et les nouveaux.
 class Track {
   const Track({
     required this.id,
@@ -28,6 +35,7 @@ class Track {
     this.coverAsset,
     this.coverUrl,
     this.audioUrl,
+    this.label,
     this.isDownloadable = true,
     this.isNew = false,
     this.isDownloaded = false,
@@ -48,7 +56,8 @@ class Track {
     }
 
     final String audioAssetPath = _optionalText(json, 'audio_asset') ?? '';
-    final Uri? audioUrl = _optionalUri(json, 'audio_url');
+    final Uri? audioUrl =
+        _firstUri(json, const <String>['audio_url', 'audioUrl']);
     if (audioAssetPath.isEmpty && audioUrl == null) {
       throw CatalogException(
         'Piste « $id » sans source audio : « audio_asset » ou « audio_url » '
@@ -66,8 +75,12 @@ class Track {
       trackNumber: _optionalInt(json, 'track_number'),
       releaseYear: _optionalInt(json, 'release_year'),
       coverAsset: _optionalText(json, 'cover_asset'),
-      coverUrl: _optionalText(json, 'cover_url'),
+      coverUrl: _firstText(
+        json,
+        const <String>['cover_url', 'imageUrl', 'image_url'],
+      ),
       audioUrl: audioUrl,
+      label: _optionalText(json, 'label'),
       isDownloadable: _optionalBool(json, 'is_downloadable') ?? true,
       isNew: _optionalBool(json, 'is_new') ?? false,
       isDownloaded: _optionalBool(json, 'is_downloaded') ?? false,
@@ -108,6 +121,10 @@ class Track {
   /// Source distante, absente de la version embarquée du MVP.
   final Uri? audioUrl;
 
+  /// Label partenaire ayant produit et distribué le morceau
+  /// (ex. `Tete Roh Studio`). `null` si le document n'en porte pas.
+  final String? label;
+
   /// Indique si l'application autorise la matérialisation locale du morceau.
   final bool isDownloadable;
 
@@ -122,20 +139,22 @@ class Track {
 
   /// Sérialise la piste au format du catalogue.
   Map<String, Object?> toJson() => <String, Object?>{
-    'id': id,
-    'title': title,
-    'artist': artistName,
-    'duration_ms': duration.inMilliseconds,
-    if (audioAssetPath.isNotEmpty) 'audio_asset': audioAssetPath,
-    if (album != null) 'album': album,
-    if (trackNumber != null) 'track_number': trackNumber,
-    if (releaseYear != null) 'release_year': releaseYear,
-    if (coverAsset != null) 'cover_asset': coverAsset,
-    if (audioUrl != null) 'audio_url': audioUrl.toString(),
-    'is_downloadable': isDownloadable,
-    'is_new': isNew,
-    'is_downloaded': isDownloaded,
-  };
+        'id': id,
+        'title': title,
+        'artist': artistName,
+        'duration_ms': duration.inMilliseconds,
+        if (audioAssetPath.isNotEmpty) 'audio_asset': audioAssetPath,
+        if (album != null) 'album': album,
+        if (trackNumber != null) 'track_number': trackNumber,
+        if (releaseYear != null) 'release_year': releaseYear,
+        if (coverAsset != null) 'cover_asset': coverAsset,
+        if (audioUrl != null) 'audio_url': audioUrl.toString(),
+        if (coverUrl != null) 'cover_url': coverUrl,
+        if (label != null) 'label': label,
+        'is_downloadable': isDownloadable,
+        'is_new': isNew,
+        'is_downloaded': isDownloaded,
+      };
 
   /// Copie la piste en modifiant uniquement les champs fournis.
   Track copyWith({
@@ -150,6 +169,7 @@ class Track {
     String? coverAsset,
     String? coverUrl,
     Uri? audioUrl,
+    String? label,
     bool? isDownloadable,
     bool? isNew,
     bool? isDownloaded,
@@ -166,6 +186,7 @@ class Track {
       coverAsset: coverAsset ?? this.coverAsset,
       coverUrl: coverUrl ?? this.coverUrl,
       audioUrl: audioUrl ?? this.audioUrl,
+      label: label ?? this.label,
       isDownloadable: isDownloadable ?? this.isDownloadable,
       isNew: isNew ?? this.isNew,
       isDownloaded: isDownloaded ?? this.isDownloaded,
@@ -186,6 +207,7 @@ class Track {
         other.coverAsset == coverAsset &&
         other.coverUrl == coverUrl &&
         other.audioUrl == audioUrl &&
+        other.label == label &&
         other.isDownloadable == isDownloadable &&
         other.isNew == isNew &&
         other.isDownloaded == isDownloaded;
@@ -193,21 +215,22 @@ class Track {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    title,
-    artistName,
-    duration,
-    audioAssetPath,
-    album,
-    trackNumber,
-    releaseYear,
-    coverAsset,
-    coverUrl,
-    audioUrl,
-    isDownloadable,
-    isNew,
-    isDownloaded,
-  );
+        id,
+        title,
+        artistName,
+        duration,
+        audioAssetPath,
+        album,
+        trackNumber,
+        releaseYear,
+        coverAsset,
+        coverUrl,
+        audioUrl,
+        label,
+        isDownloadable,
+        isNew,
+        isDownloaded,
+      );
 
   @override
   String toString() => 'Track($id, « $title » par $artistName)';
@@ -266,15 +289,31 @@ class Track {
     return value;
   }
 
-  static Uri? _optionalUri(Map<String, dynamic> json, String key) {
-    final String? raw = _optionalText(json, key);
+  /// Première valeur textuelle non vide parmi [keys], dans l'ordre fourni.
+  ///
+  /// Permet d'accepter les deux conventions de nommage des documents Firestore
+  /// (`audio_url` et `audioUrl`) sans dupliquer la logique de désérialisation.
+  static String? _firstText(Map<String, dynamic> json, List<String> keys) {
+    for (final String key in keys) {
+      final String? value = _optionalText(json, key);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  /// Équivalent de [_firstText] pour une URL absolue.
+  static Uri? _firstUri(Map<String, dynamic> json, List<String> keys) {
+    final String? raw = _firstText(json, keys);
     if (raw == null) {
       return null;
     }
     final Uri? uri = Uri.tryParse(raw);
     if (uri == null || !uri.hasScheme) {
       throw CatalogException(
-        'Champ « $key » : « $raw » n\'est pas une URL absolue valide.',
+        'Champs « ${keys.join(' / ')} » : « $raw » n\'est pas une URL absolue '
+        'valide.',
       );
     }
     return uri;

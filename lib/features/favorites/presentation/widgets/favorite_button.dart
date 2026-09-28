@@ -28,10 +28,10 @@ class FavoriteButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bool isFavorite = ref.watch(favoritesNotifierProvider).when(
-          data: (List<Favorite> favorites) => favorites
-              .any((Favorite f) => f.trackId == trackId),
+          data: (List<Favorite> favorites) =>
+              favorites.any((Favorite f) => f.trackId == trackId),
           loading: () => false,
-          error: (_, _) => false,
+          error: (_, __) => false,
         );
 
     return IconButton(

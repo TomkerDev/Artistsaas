@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../app/config/app_config.dart';
 import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/duration_formatter.dart';
@@ -43,9 +44,8 @@ class _NowPlaying extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final PlaybackMedia media = state.currentMedia!;
-    final bool isFavorite = ref
-        .watch(favoriteIdsProvider)
-        .contains(media.trackId);
+    final bool isFavorite =
+        ref.watch(favoriteIdsProvider).contains(media.trackId);
 
     return Center(
       child: SingleChildScrollView(
@@ -86,6 +86,22 @@ class _NowPlaying extends ConsumerWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 6),
+            // Crédit du label partenaire : « Produced & Distributed by … ».
+            // Le label provient du morceau publié (Firestore) et retombe sur le
+            // label de l'artiste courant lorsque le document n'en porte pas.
+            Text(
+              media.label == null
+                  ? AppConfig.artist.productionCredit
+                  : 'Produced & Distributed by ${media.label}',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(
+                  alpha: 0.8,
+                ),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
             const SizedBox(height: 16),
             _SeekBar(state: state),
             const SizedBox(height: 16),
@@ -99,6 +115,15 @@ class _NowPlaying extends ConsumerWidget {
               onPressed: () => _shareTrack(context, media),
               icon: const Icon(Icons.share_outlined, color: Colors.white),
             ),
+            const SizedBox(height: 8),
+            // Arrêt complet du flux : coupe la lecture, vide la file et fait
+            // disparaître la notification média de l'écran de verrouillage.
+            TextButton.icon(
+              onPressed: () =>
+                  ref.read(playbackControllerProvider.notifier).stop(),
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text(AppStrings.stopAudioAction),
+            ),
             if (state.hasError) ...<Widget>[
               const SizedBox(height: 12),
               _PlaybackError(state: state),
@@ -111,9 +136,8 @@ class _NowPlaying extends ConsumerWidget {
 
   void _toggleFavorite(WidgetRef ref, String trackId) {
     final FavoritesService service = ref.read(favoritesServiceProvider);
-    final bool currentlyFavorite = ref
-        .read(favoriteIdsProvider)
-        .contains(trackId);
+    final bool currentlyFavorite =
+        ref.read(favoriteIdsProvider).contains(trackId);
     if (currentlyFavorite) {
       service.removeFavorite(trackId);
     } else {
@@ -214,9 +238,8 @@ class _PlaybackControls extends ConsumerWidget {
               LoopMode.all => Icons.repeat,
               LoopMode.one => Icons.repeat_one,
             },
-            color: state.loopMode == LoopMode.off
-                ? Colors.white
-                : colors.primary,
+            color:
+                state.loopMode == LoopMode.off ? Colors.white : colors.primary,
           ),
         ),
       ],
@@ -225,10 +248,10 @@ class _PlaybackControls extends ConsumerWidget {
 
   /// Cycle du mode de boucle : off → toute la file → piste courante → off.
   static LoopMode _nextLoopMode(LoopMode mode) => switch (mode) {
-    LoopMode.off => LoopMode.all,
-    LoopMode.all => LoopMode.one,
-    LoopMode.one => LoopMode.off,
-  };
+        LoopMode.off => LoopMode.all,
+        LoopMode.all => LoopMode.one,
+        LoopMode.one => LoopMode.off,
+      };
 }
 
 /// Pochette du morceau, ou visuel de remplacement.
@@ -252,7 +275,7 @@ class _CoverArt extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -267,8 +290,8 @@ class _CoverArt extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder:
                 (BuildContext context, Object error, StackTrace? stack) {
-                  return _FallbackCover(colors: colors, title: title);
-                },
+              return _FallbackCover(colors: colors, title: title);
+            },
           ),
         ),
       );
@@ -279,7 +302,7 @@ class _CoverArt extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -294,8 +317,8 @@ class _CoverArt extends StatelessWidget {
             fit: BoxFit.cover,
             errorBuilder:
                 (BuildContext context, Object error, StackTrace? stack) {
-                  return _FallbackCover(colors: colors, title: title);
-                },
+              return _FallbackCover(colors: colors, title: title);
+            },
           ),
         ),
       );
@@ -320,7 +343,7 @@ class _FallbackCover extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),

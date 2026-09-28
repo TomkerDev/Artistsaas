@@ -69,3 +69,8 @@ flutter_launcher_icons:
       image_path: assets/icons/artist_1_icon.png
       adaptive_icon_background: "#6C3BF4"
       adaptive_icon_foreground: assets/icons/artist_1_icon.png
+    # Flavor dédié à Jethsonat (label Tete Roh Studio) : palette « Sec Sec ».
+    jethsonat:
+      image_path: assets/icons/jethsonat_icon.png
+      adaptive_icon_background: "#3B1F0E"
+      adaptive_icon_foreground: assets/icons/jethsonat_icon.png

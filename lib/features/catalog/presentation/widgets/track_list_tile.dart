@@ -93,13 +93,18 @@ class TrackListTile extends StatelessWidget {
     );
   }
 
-  /// « Artiste · Album » lorsque l'album est connu, « Artiste » sinon.
+  /// « Artiste · Album » lorsque l'album est connu, suivi du crédit de label.
   String get _subtitle {
     final String? album = track.album;
-    if (album == null || album.isEmpty) {
-      return track.artistName;
+    final String base = (album == null || album.isEmpty)
+        ? track.artistName
+        : '${track.artistName} · $album';
+    final String? label = track.label;
+    if (label == null || label.isEmpty) {
+      return base;
     }
-    return '${track.artistName} · $album';
+    // Crédit « Produced & Distributed by … » sur la fiche du morceau.
+    return '$base · Produced & Distributed by $label';
   }
 }
 

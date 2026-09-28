@@ -1,0 +1,166 @@
+#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Compile l'APK release d'un artiste en transmettant les clés d'environnement
+    via --dart-define.
+
+.DESCRIPTION
+    Les secrets ne sont jamais écrits dans le dépôt : le script lit le fichier
+    `.env` (local, ignoré par git) ou les variables déjà présentes dans
+    l'environnement, puis les transmet à `flutter build` sous forme de
+    `--dart-define=CLÉ=valeur`.
+
+    Exemple (Jethsonat, label Tete Roh Studio) :
+
+        powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1 `
+            -Flavor jethsonat -ArtistId jethsonat -ArtistFolder artist_2
+
+    Sans `.env`, les valeurs présente dans l'environnement du processus sont
+    utilisées : c'est le mode attendu en CI (secrets du dépôt).
+
+.PARAMETER Flavor
+    Flavor Android (doit exister dans `android/app/build.gradle.kts`).
+
+.PARAMETER ArtistId
+    Identifiant Firestore de l'artiste : doit correspondre au champ `artistId`
+    des documents de la collection `tracks`.
+
+.PARAMETER ArtistFolder
+    Dossier d'assets de l'artiste sous `assets/artists/`.
+
+.PARAMETER StreamOnly
+    Application « 100 % audio » : ignore le catalogue embarqué et lit tout
+    depuis Firestore. Par défaut, la valeur de `.env` (ou `true`).
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1 -Flavor jethsonat
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$Flavor,
+    [string]$ArtistId,
+    [string]$ArtistFolder,
+    [bool]$StreamOnly = $true,
+    [string]$Target = 'lib/main.dart',
+    [string]$OutputDirectory = ''
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$envFile = Join-Path $repoRoot '.env'
+
+# --- Lecture du .env -------------------------------------------------------
+# Format accepté : `CLE=valeur`, `#` pour les commentaires. Les guillemets
+# entourant la valeur sont retirés.
+$fromFile = @{}
+if (Test-Path $envFile) {
+    Write-Host "Lecture de la configuration : $envFile" -ForegroundColor DarkGray
+    foreach ($line in Get-Content $envFile) {
+        $trimmed = $line.Trim()
+        if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
+        $parts = $trimmed -split '=', 2
+        if ($parts.Count -ne 2) { continue }
+        $fromFile[$parts[0].Trim()] = $parts[1].Trim().Trim('"').Trim("'")
+    }
+}
+
+function Get-Config {
+    param([string]$Name, [string]$Default = '')
+    # Priorité : variable du processus, puis .env, puis valeur par défaut.
+    $value = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($value) -and $fromFile.ContainsKey($Name)) {
+        $value = $fromFile[$Name]
+    }
+    if ([string]::IsNullOrWhiteSpace($value)) { return $Default }
+    return $value
+}
+
+# --- Identité de l'artiste -------------------------------------------------
+if ([string]::IsNullOrWhiteSpace($ArtistId))     { $ArtistId     = Get-Config 'ARTIST_ID'     $Flavor }
+if ([string]::IsNullOrWhiteSpace($ArtistFolder)) { $ArtistFolder = Get-Config 'ARTIST_FOLDER' 'artist_1' }
+$streamOnlyValue = Get-Config 'STREAM_ONLY' ($StreamOnly.ToString().ToLower())
+
+# --- Secrets ---------------------------------------------------------------
+# Seules les paires réellement renseignées sont transmises : une clé vide
+# produirait un `--dart-define` qui masque la valeur par défaut sans l'informer.
+$secrets = @(
+    'FIREBASE_API_KEY',
+    'FIREBASE_MESSAGING_SENDER_ID',
+    'FIREBASE_PROJECT_ID',
+    'FIREBASE_STORAGE_BUCKET',
+    'FIREBASE_APP_ID',
+    'FIREBASE_ANDROID_APP_ID',
+    'FIREBASE_AUTH_DOMAIN',
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY'
+)
+
+$defines = @(
+    "--dart-define=ARTIST_ID=$ArtistId",
+    "--dart-define=ARTIST_FOLDER=$ArtistFolder",
+    "--dart-define=STREAM_ONLY=$streamOnlyValue"
+)
+
+$missing = @()
+foreach ($name in $secrets) {
+    $value = Get-Config $name
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        $missing += $name
+        continue
+    }
+    $defines += "--dart-define=$name=$value"
+}
+
+Write-Host ''
+Write-Host 'Configuration du build' -ForegroundColor Cyan
+Write-Host "  flavor        : $Flavor"
+Write-Host "  artistId      : $ArtistId"
+Write-Host "  artistFolder  : $ArtistFolder"
+Write-Host "  streamOnly    : $streamOnlyValue"
+Write-Host "  secrets       : $($secrets.Count - $missing.Count)/$($secrets.Count) renseignés"
+
+if ($missing.Count -gt 0) {
+    Write-Warning "Variables absentes : $($missing -join ', ')"
+    Write-Warning 'Sans FIREBASE_*, le catalogue distant restera vide et l''application'
+    Write-Warning 'affichera « Catalogue indisponible ». Copiez .env.example vers .env.'
+}
+
+# --- Commande de build ----------------------------------------------------
+$arguments = @('build', 'apk', '--release', '--flavor', $Flavor, '-t', $Target) + $defines
+# `--no-tree-shake-icons` : sans l'artefact `const_finder` de l'engine, le
+# tree-shaker d'icônes échoue (cf. README, « Pièges connus »).
+$arguments += '--no-tree-shake-icons'
+
+if (-not [string]::IsNullOrWhiteSpace($OutputDirectory)) {
+    $arguments += @('--build-dir', $OutputDirectory)
+}
+
+Write-Host ''
+Write-Host "flutter $($arguments -join ' ')" -ForegroundColor Green
+Write-Host ''
+
+Push-Location $repoRoot
+try {
+    & flutter @arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Le build a échoué (code $LASTEXITCODE)."
+    }
+}
+finally {
+    Pop-Location
+}
+
+# Les APK vivent sous `build/`, effacé par `flutter clean` : on les copie hors
+# de `build/` dès la production.
+$apk = Join-Path $repoRoot "build\app\outputs\flutter-apk\app-$Flavor-release.apk"
+if (Test-Path $apk) {
+    $destination = Join-Path $repoRoot "releases\$Flavor"
+    New-Item -ItemType Directory -Force -Path $destination | Out-Null
+    $target = Join-Path $destination "app-$Flavor-release.apk"
+    Copy-Item $apk $target -Force
+    Write-Host ''
+    Write-Host "APK copié dans : $target" -ForegroundColor Green
+}
+else {
+    Write-Warning "APK introuvable à l'emplacement attendu : $apk"
+}

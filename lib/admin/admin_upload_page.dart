@@ -22,9 +22,10 @@ class AdminUploadPage extends ConsumerStatefulWidget {
 }
 
 class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
-  // La liste centralisée des 12 artistes provient de `admin_routes.dart`
-  // (constante `allAdminArtists` / classe `AdminArtistOption`), évitant ainsi
-  // la duplication entre le panneau d'upload et les flavors Android.
+  // La liste des artistes provient du registre central
+  // (`lib/core/constants/artist_config.dart`), exposé par `admin_routes.dart`
+  // via `adminArtistOptions` / `AdminArtistOption`. Le panneau et les flavors
+  // Android partagent donc une source unique, sans duplication.
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _title = TextEditingController();
@@ -51,27 +52,64 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   /// été lu — évite l'affichage du Dropdown avant que le rôle ne soit connu.
   bool _loadingRole = true;
 
+  /// Artistes visibles dans le sélecteur pour le rôle courant.
+  ///
+  /// - `artist` : un seul artiste, celui de `assignedArtistId` — le sélecteur est
+  ///   verrouillé et la liste des morceaux est filtrée sur ce même identifiant ;
+  /// - `agency_admin` : la liste complète, avec bascule dynamique entre les
+  ///   artistes via le menu déroulant.
+  List<AdminArtistOption> get _visibleArtists {
+    final String? assigned = _assignedArtistId;
+    if (_isAgencyAdmin ||
+        assigned == null ||
+        assigned.isEmpty ||
+        assigned == 'all') {
+      return adminArtistOptions;
+    }
+    return <AdminArtistOption>[
+      for (final AdminArtistOption option in adminArtistOptions)
+        if (option.id == assigned) option,
+    ];
+  }
+
+  /// `true` si l'utilisateur peut basculer entre tous les artistes.
+  bool get _isAgencyAdmin => _userRole == 'agency_admin';
+
+  /// Identifiant effectivement appliqué au filtrage Firestore.
+  ///
+  /// Un artiste est toujours verrouillé sur `assignedArtistId` : même si la
+  /// liste déroulante affichait autre chose, la requête ne pourrait pas sortir
+  /// de son périmètre. L'administrateur, lui, suit sa sélection courante.
+  String get _effectiveArtistId {
+    final String? assigned = _assignedArtistId;
+    if (_userRole == 'artist' && assigned != null && assigned.isNotEmpty) {
+      return assigned;
+    }
+    return _selectedArtistId;
+  }
+
+  /// Label de l'artiste courant, écrit dans le document publié.
+  String get _artistLabel =>
+      adminArtistFor(_effectiveArtistId)?.label ?? 'Tete Roh Studio';
+
   Stream<QuerySnapshot<Map<String, dynamic>>> _tracksStream() {
     if (_loadingRole || FirebaseAuth.instance.currentUser == null) {
       return const Stream<QuerySnapshot<Map<String, dynamic>>>.empty();
     }
-    final bool allArtists =
-        _userRole == 'agency_admin' && _assignedArtistId == 'all';
-    final Query<Map<String, dynamic>> query = allArtists
-        ? FirebaseFirestore.instance.collection('tracks')
-        : FirebaseFirestore.instance.collection('tracks').where(
-              'artistId',
-              isEqualTo: _assignedArtistId != null && _userRole == 'artist'
-                  ? _assignedArtistId
-                  : _selectedArtistId,
-            );
-    return query.orderBy('createdAt', descending: true).snapshots();
+    // Le filtrage est toujours appliqué : la liste des morceaux ne montre que
+    // ceux de l'artiste courant, quelle que soit sa capacité à changer
+    // d'artiste dans le sélecteur.
+    final Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('tracks')
+        .where('artistId', isEqualTo: _effectiveArtistId)
+        .orderBy('createdAt', descending: true);
+    return query.snapshots();
   }
 
   @override
   void initState() {
     super.initState();
-    _selectedArtistId = allAdminArtists.first.id;
+    _selectedArtistId = adminArtistOptions.first.id;
     _loadUserInfo();
   }
 
@@ -117,11 +155,13 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     }
 
     // Artistes non-admins (sans accès 'all') : verrouiller le sélecteur
-    // sur leur artiste assigné (ex: 'dilson_le_mustang').
-    if (_userRole != 'agency_admin' &&
-        _assignedArtistId != null &&
-        _assignedArtistId != 'all') {
-      _selectedArtistId = _assignedArtistId!;
+    // sur leur artiste assigné (ex: 'jethsonat').
+    final String? assigned = _assignedArtistId;
+    if (assigned != null &&
+        assigned.isNotEmpty &&
+        assigned != 'all' &&
+        !_isAgencyAdmin) {
+      _selectedArtistId = assigned;
     }
 
     if (mounted) {
@@ -138,11 +178,13 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     super.dispose();
   }
 
-  String get _artistName =>
-      allAdminArtists.firstWhere((a) => a.id == _selectedArtistId).name;
+  /// Nom de scène de l'artiste effectif, résolu via le registre central.
+  String get _artistName => adminArtistName(_effectiveArtistId);
 
+  /// Bascule l'artiste courant : réservé au rôle `agency_admin`, dont la liste
+  /// déroulante est la seule source de filtrage.
   void _onArtistChanged(String newArtistId) {
-    if (newArtistId == _selectedArtistId) return;
+    if (newArtistId == _selectedArtistId || !_isAgencyAdmin) return;
     setState(() => _selectedArtistId = newArtistId);
   }
 
@@ -235,7 +277,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     try {
       // Étape A : MP3 sur Supabase Storage
       audioPublicUrl = await SupabaseStorageService.uploadMedia(
-        artistId: _selectedArtistId,
+        artistId: _effectiveArtistId,
         fileName: '$trackId.mp3',
         bytes: _audioBytes!,
       );
@@ -246,25 +288,37 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         final String ext =
             _coverFileName?.split('.').last.toLowerCase() ?? 'jpg';
         imagePublicUrl = await SupabaseStorageService.uploadMedia(
-          artistId: _selectedArtistId,
+          artistId: _effectiveArtistId,
           fileName: '$trackId.$ext',
           bytes: _coverBytes!,
         );
       }
 
       // Étape C : document Firestore 'tracks'
+      //
+      // Schéma du document : `title`, `artist`, `artistId`, `label`, `audioUrl`,
+      // `imageUrl`, `duration_ms`, `is_new` et `created_at`. Les noms d'URL
+      // sont écrits en `camelCase` comme spécifié ; l'application mobile
+      // accepte les deux conventions, et `cover_url` est conservé par
+      // compatibilité avec les documents déjà en ligne.
       final String documentId = trackId;
-      await FirebaseFirestore.instance.collection('tracks').add({
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .add(<String, Object?>{
         'id': documentId,
-        'artistId': _selectedArtistId,
+        'artistId': _effectiveArtistId,
         'artist': _artistName,
+        'label': _artistLabel,
         'title': title,
         'album': album,
         'duration_ms': int.parse(_durationMs.text.trim()),
+        'audioUrl': audioPublicUrl,
         'audio_url': audioPublicUrl,
+        'imageUrl': imagePublicUrl,
         'cover_url': imagePublicUrl,
         'is_new': true,
         'is_downloadable': true,
+        'created_at': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -601,7 +655,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                                       const <Map<String, dynamic>>[];
                               return _TrackList(
                                 tracks: tracks,
-                                artistId: _selectedArtistId,
+                                artistId: _effectiveArtistId,
                                 onDelete: _deleteTrack,
                               );
                             },
@@ -621,10 +675,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
   /// Section KPI — affiche 4 cartes de statistiques en temps réel.
   ///
-  /// Écoute la collection Firestore `tracks` via un [StreamBuilder] :
-  /// - Si le rôle est `agency_admin` et `assignedArtistId == 'all'`,
-  ///   la requête couvre tous les morceaux de tous les artistes.
-  /// - Sinon, la requête est filtrée par `artistId == _selectedArtistId`.
+  /// Écoute la collection Firestore `tracks` via un [StreamBuilder]. Les
+  /// statistiques portent toujours sur l'artiste courant : un compte
+  /// `agency_admin` bascule d'artiste via le sélecteur, un compte `artist` est
+  /// verrouillé sur le sien.
   ///
   /// Pendant le chargement initial du rôle utilisateur ou du premier
   /// snapshot Firestore, un squelette de chargement est affiché.
@@ -633,14 +687,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       return _kpiLoadingSkeleton(colors);
     }
 
-    final bool isFullAdmin =
-        _userRole == 'agency_admin' && _assignedArtistId == 'all';
-
-    final Query<Map<String, dynamic>> query = isFullAdmin
-        ? FirebaseFirestore.instance.collection('tracks')
-        : FirebaseFirestore.instance
-            .collection('tracks')
-            .where('artistId', isEqualTo: _selectedArtistId);
+    final Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('tracks')
+        .where('artistId', isEqualTo: _effectiveArtistId);
 
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: query.snapshots(),
@@ -657,12 +706,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
         final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs =
             snapshot.data!.docs;
-        final _KpiData kpiData = _computeKpis(
-          docs,
-          isFullAdmin,
-          _artistName,
-        );
-
+        final _KpiData kpiData = _computeKpis(docs, _artistName);
         return _KpiGrid(kpiData: kpiData, colors: colors);
       },
     );
@@ -670,22 +714,21 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
   /// Calcule les indicateurs clés à partir d'une liste de documents `tracks`.
   ///
+  /// Les documents reçus portent tous le même `artistId` (la requête est
+  /// filtrée sur l'artiste courant), d'où une carte « Artiste » qui affiche
+  /// toujours le nom plutôt qu'un total.
+  ///
   /// - [totalTracks] : nombre total de documents.
   /// - [totalAlbums] : nombre d'albums/singles distincts (les chaînes vides
   ///   sont comptées comme `'Single'`).
-  /// - [totalArtists] : nombre d'artistes distincts, ou `-1` si l'utilisateur
-  ///   n'est pas admin agence global (auquel cas la carte affiche le nom de
-  ///   l'artiste au lieu d'un total).
   /// - [lastTrackTitle] / [lastTrackDate] : titre et date du morceau dont
   ///   le champ `createdAt` est le plus récent.
   _KpiData _computeKpis(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    bool isFullAdmin,
     String artistName,
   ) {
     final int totalTracks = docs.length;
     final Set<String> albums = <String>{};
-    final Set<String> artistIds = <String>{};
 
     QueryDocumentSnapshot<Map<String, dynamic>>? lastDoc;
     DateTime? lastDate;
@@ -697,11 +740,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       final String albumKey =
           album != null && album.trim().isNotEmpty ? album.trim() : 'Single';
       albums.add(albumKey);
-
-      final String? artistId = data['artistId'] as String?;
-      if (artistId != null && artistId.isNotEmpty) {
-        artistIds.add(artistId);
-      }
 
       final Object? createdAt = data['createdAt'];
       if (createdAt is Timestamp) {
@@ -719,7 +757,6 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     return _KpiData(
       totalTracks: totalTracks,
       totalAlbums: albums.length,
-      totalArtists: isFullAdmin ? artistIds.length : -1,
       artistName: artistName,
       lastTrackTitle: lastTrackTitle,
       lastTrackDate: lastDate != null ? _formatDate(lastDate) : null,
@@ -800,10 +837,9 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       );
     }
 
-    // Le Dropdown est activé pour les admins ou les comptes avec accès
-    // global ('all'), sinon il reste verrouillé sur l'artiste assigné.
-    final bool canChooseArtist =
-        _userRole == 'agency_admin' || _assignedArtistId == 'all';
+    // Un compte `artist` reste verrouillé sur son artiste assigné ; seul
+    // l'administrateur peut basculer, via la liste déroulante.
+    final bool canChooseArtist = _isAgencyAdmin;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       decoration: BoxDecoration(
@@ -824,24 +860,14 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
             ).textTheme.bodyMedium?.copyWith(color: colors.onSurfaceVariant),
           ),
           const SizedBox(width: 12),
-          if (canChooseArtist)
-            Expanded(
-              child: _ArtistDropdown(
-                artists: allAdminArtists,
-                selectedId: _selectedArtistId,
-                onChanged: _onArtistChanged,
-                disabled: false,
-              ),
-            )
-          else
-            Expanded(
-              child: _ArtistDropdown(
-                artists: allAdminArtists,
-                selectedId: _selectedArtistId,
-                onChanged: (_) {},
-                disabled: true,
-              ),
+          Expanded(
+            child: _ArtistDropdown(
+              artists: _visibleArtists,
+              selectedId: _effectiveArtistId,
+              onChanged: _onArtistChanged,
+              disabled: !canChooseArtist,
             ),
+          ),
           const SizedBox(width: 8),
           Icon(
             canChooseArtist ? Icons.admin_panel_settings : Icons.lock_outline,
@@ -1170,13 +1196,12 @@ class _ErrorBanner extends StatelessWidget {
 
 /// Données calculées pour la section KPI.
 ///
-/// `totalArtists` vaut `-1` quand l'utilisateur n'est pas un admin agence
-/// global — la carte affichera alors le [artistName] au lieu d'un total.
+/// Les statistiques portent sur l'artiste courant : la carte « Artiste »
+/// affiche donc toujours [artistName].
 class _KpiData {
   const _KpiData({
     required this.totalTracks,
     required this.totalAlbums,
-    required this.totalArtists,
     required this.artistName,
     required this.lastTrackTitle,
     this.lastTrackDate,
@@ -1184,7 +1209,6 @@ class _KpiData {
 
   final int totalTracks;
   final int totalAlbums;
-  final int totalArtists;
   final String artistName;
   final String lastTrackTitle;
   final String? lastTrackDate;
@@ -1233,10 +1257,8 @@ class _KpiGrid extends StatelessWidget {
         color: const Color(0xFF3B82F6),
       ),
       _StatCardData(
-        title: kpiData.totalArtists >= 0 ? 'Total Artistes' : 'Artiste',
-        value: kpiData.totalArtists >= 0
-            ? kpiData.totalArtists.toString()
-            : kpiData.artistName,
+        title: 'Artiste',
+        value: kpiData.artistName,
         icon: Icons.mic,
         color: const Color(0xFF10B981),
       ),

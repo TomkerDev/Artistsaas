@@ -1,17 +1,62 @@
 rules_version = '2';
 
-// Règles de démarrage pour la collection `tracks` (nouveautés).
+// Règles de la collection `tracks` (catalogue des artistes).
 //
-// Lecture : publique — l'application mobile lit les nouveautés sans compte.
-// Écriture : réservée aux comptes authentifiés (le panneau d'administration).
+// Lecture : publique — l'application mobile lit le catalogue sans compte.
+// Écriture : réservée aux comptes authentifiés (le panneau d'administration et
+// le script d'importation des releases).
+//
+// L'importation de Jethsonat écrit des documents portant `artistId ==
+// 'jethsonat'` et `label == 'Tete Roh Studio'` : la validation ci-dessous
+// refuse tout document dont le schéma dérive, afin qu'une coquille ou une
+// saisie incomplète ne se retrouve pas dans l'application.
 //
 // Durcissement recommandé une fois les custom claims en place :
 //   allow write: if request.auth != null && request.auth.token.admin == true;
 service cloud.firestore {
   match /databases/{database}/documents {
     match /tracks/{trackId} {
+
+      // Lecture publique (application mobile, sans authentification).
       allow read: if true;
-      allow create, update, delete: if request.auth != null;
+
+      // Écriture réservée aux comptes authentifiés.
+      allow create: if isValidAdmin()
+                    && isValidTrack();
+
+      // Mise à jour : on ne réécrit pas un document existant avec un schéma
+      // invalide. `request.resource` seul est contrôlé, ce qui autorise les
+      // corrections partielles (suppression d'une pochette, par exemple).
+      allow update: if isValidAdmin()
+                    && isValidTrack();
+
+      allow delete: if isValidAdmin();
+
+      /// Compte autorisé à publier.
+      function isValidAdmin() {
+        return request.auth != null;
+      }
+
+      /// Le document respecte le schéma du catalogue.
+      ///
+      /// `audioUrl`/`audio_url` : URL absolue du MP3 (Supabase Storage).
+      /// `imageUrl`/`cover_url` : facultatif, pochette.
+      /// `duration_ms` : durée strictement positive.
+      /// `label` : label partenaire crédité sur le lecteur.
+      function isValidTrack() {
+        let data = request.resource.data;
+        let audio = 'audioUrl' in data ? data.audioUrl : data.audio_url;
+        return data.keys().hasAll(['title', 'artist', 'artistId', 'duration_ms'])
+            && 'label' in data
+            && data.title is string
+            && data.artist is string
+            && data.artistId is string
+            && data.label is string
+            && data.duration_ms is int
+            && data.duration_ms > 0
+            && audio is string
+            && audio.matches('^https?://.*');
+      }
     }
   }
 }

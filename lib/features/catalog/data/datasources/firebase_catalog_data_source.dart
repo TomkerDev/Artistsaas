@@ -15,10 +15,15 @@ import '../../domain/entities/track.dart';
 /// double, et la production utilise [FirebaseFirestore.instance] après
 /// l'initialisation de Firebase dans `main()`.
 class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
-  FirebaseCatalogDataSource({FirebaseFirestore? firestore, this.limit = 15})
-    : _firestore = firestore;
+  FirebaseCatalogDataSource({FirebaseFirestore? firestore, this.limit = 500})
+      : _firestore = firestore;
 
-  /// Nombre maximal de nouveautés récupérées en une passe.
+  /// Nombre maximal de morceaux récupérés en une passe.
+  ///
+  /// Pour une application « 100 % audio », Firestore est la source *unique* :
+  /// la limite doit donc couvrir l'intégralité du catalogue, et pas seulement
+  /// les dernières nouveautés. 500 reste sous le plafond d'une requête simple
+  /// (index automatique sur `artistId`, sans coût d'index composé).
   final int limit;
 
   final FirebaseFirestore? _firestore;

@@ -45,6 +45,7 @@ class DefaultPlaybackSourceResolver implements PlaybackSourceResolver {
       source: source,
       artAsset: track.coverAsset,
       coverUrl: track.coverUrl,
+      label: track.label,
     );
   }
 }

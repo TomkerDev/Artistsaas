@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:artistsaas/app/config/app_config.dart';
 import 'package:artistsaas/app/di/app_providers.dart';
 import 'package:artistsaas/core/constants/app_strings.dart';
+import 'package:artistsaas/core/constants/artist_config.dart';
 import 'package:artistsaas/core/errors/app_exception.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/music_repository.dart';
@@ -27,17 +29,17 @@ void main() {
   FakeAudioPlayerService? audioPlayerService;
 
   List<Override> overrides(TrackRepository repository) => <Override>[
-    musicRepositoryProvider.overrideWithValue(repository),
-    downloadRepositoryProvider.overrideWithValue(
-      downloadRepository ??= FakeDownloadRepository(),
-    ),
-    audioPlayerServiceProvider.overrideWithValue(
-      audioPlayerService ??= FakeAudioPlayerService(),
-    ),
-    playbackSourceResolverProvider.overrideWithValue(
-      FakePlaybackSourceResolver(),
-    ),
-  ];
+        musicRepositoryProvider.overrideWithValue(repository),
+        downloadRepositoryProvider.overrideWithValue(
+          downloadRepository ??= FakeDownloadRepository(),
+        ),
+        audioPlayerServiceProvider.overrideWithValue(
+          audioPlayerService ??= FakeAudioPlayerService(),
+        ),
+        playbackSourceResolverProvider.overrideWithValue(
+          FakePlaybackSourceResolver(),
+        ),
+      ];
 
   Future<void> pumpHome(WidgetTester tester, TrackRepository repository) {
     return tester.pumpWidget(
@@ -108,11 +110,16 @@ void main() {
       );
       await tester.pump();
 
+      // Le header porte la pochette officielle de l'artiste, son nom de scène
+      // et le crédit du label partenaire, le tout lu depuis le registre
+      // central (`artist_config.dart`).
+      final ArtistProfile artist = AppConfig.artist;
       final Finder hero = find.ancestor(
-        of: find.text('Dilson Le Mustang'),
+        of: find.text(artist.stageName),
         matching: find.byType(ClipRRect),
       );
-      expect(find.text('Compil Officielles'), findsOneWidget);
+      expect(find.text(artist.universe), findsOneWidget);
+      expect(find.text(artist.productionCredit), findsOneWidget);
       expect(hero, findsWidgets);
       final Finder heroDecorations = find.descendant(
         of: hero.first,

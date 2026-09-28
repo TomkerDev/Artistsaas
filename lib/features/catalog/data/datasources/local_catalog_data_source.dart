@@ -20,8 +20,8 @@ class LocalCatalogDataSource implements CatalogDataSource {
   const LocalCatalogDataSource({
     String assetPath = defaultAssetPath,
     AssetBundle? bundle,
-  }) : _assetPath = assetPath,
-       _bundle = bundle;
+  })  : _assetPath = assetPath,
+        _bundle = bundle;
 
   /// Chemin du catalogue de l'artiste courant.
   static const String defaultAssetPath = AppConfig.catalogAssetPath;
@@ -31,6 +31,15 @@ class LocalCatalogDataSource implements CatalogDataSource {
 
   @override
   Future<List<Track>> fetchTracks() async {
+    // Application « 100 % audio » : le catalogue embarqué est volontairement
+    // ignoré. Le fichier `assets/catalog/catalog.json` étant **partagé** entre
+    // toutes les applications, il contient les titres d'autres artistes qu'il
+    // ne faut pas afficher ici. Les morceaux de l'artiste courant arrivent
+    // exclusivement de Firestore (voir `FirebaseCatalogDataSource`).
+    if (AppConfig.streamOnly) {
+      return const <Track>[];
+    }
+
     final String raw = await _readAsset();
     final Object? decoded = _decodeJson(raw);
     if (decoded is! List) {

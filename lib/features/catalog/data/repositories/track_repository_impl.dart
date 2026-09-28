@@ -1,3 +1,4 @@
+import '../../../../app/config/app_config.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../library/domain/repositories/download_repository.dart';
 import '../../domain/datasources/catalog_data_source.dart';
@@ -29,15 +30,23 @@ class TrackRepositoryImpl implements TrackRepository {
     required RemoteCatalogDataSource remote,
     required DownloadRepository downloads,
     required String artistId,
-  }) : _local = local,
-       _remote = remote,
-       _downloads = downloads,
-       _artistId = artistId;
+    bool? streamOnly,
+  })  : _local = local,
+        _remote = remote,
+        _downloads = downloads,
+        _artistId = artistId,
+        _streamOnly = streamOnly ?? AppConfig.streamOnly;
 
   final CatalogDataSource _local;
   final RemoteCatalogDataSource _remote;
   final DownloadRepository _downloads;
   final String _artistId;
+
+  /// Application « 100 % audio » : Firestore est la source unique.
+  ///
+  /// Injectable pour les tests — la valeur de production vient du build
+  /// (`--dart-define=STREAM_ONLY=true`, voir `AppConfig.streamOnly`).
+  final bool _streamOnly;
 
   Future<List<Track>>? _cache;
 
@@ -46,7 +55,8 @@ class TrackRepositoryImpl implements TrackRepository {
 
   Future<List<Track>> _load() async {
     try {
-      final List<Track> embedded = await _local.fetchTracks();
+      final List<Track> embedded =
+          _streamOnly ? const <Track>[] : await _local.fetchTracks();
       final Set<String> downloaded = await _downloads.getDownloadedTrackIds();
       final List<Track> newTracks = await _fetchNewTracks();
 
@@ -73,16 +83,22 @@ class TrackRepositoryImpl implements TrackRepository {
     }
   }
 
-  /// Récupère les nouveautés distantes, en absorbant les erreurs réseau.
+  /// Récupère les morceaux distants, en absorbant les erreurs réseau.
   ///
-  /// Le catalogue embarqué est la base garantie : une source distante
-  /// injoignable ne doit pas priver l'utilisateur de l'ensemble de l'œuvre.
+  /// Deux régimes :
+  /// - **catalogue embarqué actif** (application classique) : la source
+  ///   distante est un complément ; son indisponibilité ne doit pas priver
+  ///   l'utilisateur de l'œuvre livrée dans l'APK, l'erreur est donc absorbée ;
+  /// - **100 % audio** (`_streamOnly`) : Firestore est la *seule*
+  ///   source. Absorber l'erreur afficherait un catalogue vide sans explication,
+  ///   donc l'erreur remonte à l'écran, qui propose « Réessayer ».
   Future<List<Track>> _fetchNewTracks() async {
     try {
       return await _remote.fetchNewTracks(_artistId);
-    } on AppException {
-      return const <Track>[];
     } on Object {
+      if (_streamOnly) {
+        rethrow;
+      }
       return const <Track>[];
     }
   }
