@@ -85,13 +85,13 @@ class TrackRepositoryImpl implements TrackRepository {
 
   /// Récupère les morceaux distants, en absorbant les erreurs réseau.
   ///
-  /// Deux régimes :
-  /// - **catalogue embarqué actif** (application classique) : la source
-  ///   distante est un complément ; son indisponibilité ne doit pas priver
-  ///   l'utilisateur de l'œuvre livrée dans l'APK, l'erreur est donc absorbée ;
-  /// - **100 % audio** (`_streamOnly`) : Firestore est la *seule*
-  ///   source. Absorber l'erreur afficherait un catalogue vide sans explication,
-  ///   donc l'erreur remonte à l'écran, qui propose « Réessayer ».
+  /// Firestore est ici un **complément** : les morceaux embarqués dans le
+  /// bundle restent jouables sans réseau, donc un échec distant ne doit pas
+  /// priver l'utilisateur de l'œuvre livrée dans l'APK.
+  ///
+  /// Le cas `streamOnly` (artiste *sans* aucun contenu embarqué) fait exception :
+  /// absorber l'erreur afficherait un catalogue vide sans explication, donc
+  /// l'erreur remonte à l'écran, qui propose « Réessayer ».
   Future<List<Track>> _fetchNewTracks() async {
     try {
       return await _remote.fetchNewTracks(_artistId);

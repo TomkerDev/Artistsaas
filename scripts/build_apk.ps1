@@ -29,8 +29,9 @@
     Dossier d'assets de l'artiste sous `assets/artists/`.
 
 .PARAMETER StreamOnly
-    Application « 100 % audio » : ignore le catalogue embarqué et lit tout
-    depuis Firestore. Par défaut, la valeur de `.env` (ou `true`).
+    Mode « 100 % streaming » : le catalogue embarqué est ignoré et tout
+    provient de Firestore. Par défaut `false` (catalogue hybride : titres
+    embarqués jouables hors-ligne + nouveautés Firestore).
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File scripts/build_apk.ps1 -Flavor jethsonat
@@ -40,7 +41,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Flavor,
     [string]$ArtistId,
     [string]$ArtistFolder,
-    [bool]$StreamOnly = $true,
+    [bool]$StreamOnly = $false,
     [string]$Target = 'lib/main.dart',
     [string]$OutputDirectory = ''
 )

@@ -36,6 +36,7 @@ class Track {
     this.coverUrl,
     this.audioUrl,
     this.label,
+    this.artistId,
     this.isDownloadable = true,
     this.isNew = false,
     this.isDownloaded = false,
@@ -81,6 +82,8 @@ class Track {
       ),
       audioUrl: audioUrl,
       label: _optionalText(json, 'label'),
+      artistId:
+          _optionalText(json, 'artistId') ?? _optionalText(json, 'artist_id'),
       isDownloadable: _optionalBool(json, 'is_downloadable') ?? true,
       isNew: _optionalBool(json, 'is_new') ?? false,
       isDownloaded: _optionalBool(json, 'is_downloaded') ?? false,
@@ -125,6 +128,13 @@ class Track {
   /// (ex. `Tete Roh Studio`). `null` si le document n'en porte pas.
   final String? label;
 
+  /// Identifiant de l'artiste propriétaire du morceau (`jethsonat`, …).
+  ///
+  /// Clé du cloisonnement du catalogue embarqué, qui est **partagé** entre
+  /// toutes les applications : sans ce champ, le lecteur ne saurait pas
+  /// distinguer « Sec Sec » de Jethsonat d'un titre de démonstration.
+  final String? artistId;
+
   /// Indique si l'application autorise la matérialisation locale du morceau.
   final bool isDownloadable;
 
@@ -151,6 +161,7 @@ class Track {
         if (audioUrl != null) 'audio_url': audioUrl.toString(),
         if (coverUrl != null) 'cover_url': coverUrl,
         if (label != null) 'label': label,
+        if (artistId != null) 'artistId': artistId,
         'is_downloadable': isDownloadable,
         'is_new': isNew,
         'is_downloaded': isDownloaded,
@@ -170,6 +181,7 @@ class Track {
     String? coverUrl,
     Uri? audioUrl,
     String? label,
+    String? artistId,
     bool? isDownloadable,
     bool? isNew,
     bool? isDownloaded,
@@ -187,6 +199,7 @@ class Track {
       coverUrl: coverUrl ?? this.coverUrl,
       audioUrl: audioUrl ?? this.audioUrl,
       label: label ?? this.label,
+      artistId: artistId ?? this.artistId,
       isDownloadable: isDownloadable ?? this.isDownloadable,
       isNew: isNew ?? this.isNew,
       isDownloaded: isDownloaded ?? this.isDownloaded,
@@ -208,6 +221,7 @@ class Track {
         other.coverUrl == coverUrl &&
         other.audioUrl == audioUrl &&
         other.label == label &&
+        other.artistId == artistId &&
         other.isDownloadable == isDownloadable &&
         other.isNew == isNew &&
         other.isDownloaded == isDownloaded;
@@ -227,6 +241,7 @@ class Track {
         coverUrl,
         audioUrl,
         label,
+        artistId,
         isDownloadable,
         isNew,
         isDownloaded,

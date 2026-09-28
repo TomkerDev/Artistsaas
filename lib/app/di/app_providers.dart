@@ -35,7 +35,11 @@ import '../config/app_config.dart';
 /// `AppConfig`), ce qui permet à une même base de code de servir les dix
 /// applications distribuées.
 final Provider<CatalogDataSource> catalogDataSourceProvider =
-    Provider<CatalogDataSource>((Ref ref) => const LocalCatalogDataSource());
+    Provider<CatalogDataSource>(
+      // Non-`const` : `LocalCatalogDataSource` filtre sur `AppConfig.artistId`,
+      // un getter déduit de `--dart-define`, qui n'est pas une constante.
+      (Ref ref) => LocalCatalogDataSource(),
+    );
 
 /// Source distante des nouveautés (collection Firestore `tracks`).
 final Provider<RemoteCatalogDataSource> remoteCatalogDataSourceProvider =

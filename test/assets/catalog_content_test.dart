@@ -86,6 +86,44 @@ void main() {
     }
   });
 
+  test('les MP3 hors-ligne sont des fichiers audio valides', () {
+    // La durée d'un MP3 ne peut pas être relue sans décodeur : contrairement au
+    // WAV, son en-tête ne porte pas d'horodatage, et le marqueur `Info` écrit
+    // par ffmpeg se situe dans la région ID3v2 — l'analyser en Dart serait
+    // fragile. Le contrôle vérifie donc l'intégrité du fichier ; l'exactitude
+    // des durées est vérifiée à la génération par `ffprobe`
+    // (cf. tool/generate_demo_audio.dart).
+    for (final Track track in tracks.where(
+      (Track track) => track.audioAssetPath.endsWith('.mp3'),
+    )) {
+      final File file = File(track.audioAssetPath);
+      expect(file.existsSync(), isTrue, reason: track.audioAssetPath);
+      expect(file.lengthSync(), greaterThan(1024), reason: track.id);
+      expect(
+        _hasMpegMagicNumber(file.readAsBytesSync()),
+        isTrue,
+        reason: '${track.id} n\'est pas un MP3 valide',
+      );
+      expect(track.duration, greaterThan(Duration.zero));
+    }
+  });
+
+  test('les cinq titres hors-ligne de Jethsonat sont déclarés', () {
+    final List<Track> jethsonat =
+        tracks.where((Track track) => track.artistId == 'jethsonat').toList();
+
+    expect(
+      jethsonat,
+      hasLength(5),
+      reason: 'le catalogue doit livrer 5 titres hors-ligne à Jethsonat',
+    );
+    for (final Track track in jethsonat) {
+      expect(track.label, 'Tete Roh Studio');
+      expect(track.audioAssetPath, isNotEmpty);
+      expect(track.hasRemoteSource, isFalse, reason: 'titre hors-ligne');
+    }
+  });
+
   test('la durée déclarée correspond à celle du fichier audio', () async {
     // Le contrôle ne s'applique qu'aux WAV PCM, dont l'en-tête est lisible
     // sans décodeur. Les autres formats (m4a, mp3) sont simplement ignorés :
@@ -100,6 +138,22 @@ void main() {
       );
     }
   });
+}
+
+/// `true` si [bytes] commence par un début de fichier MPEG audio.
+///
+/// Deux formes sont admises : un tag ID3 (`ID3`), ou un en-tête de trame,
+/// dont les 11 premiers bits sont toujours à 1 (`0xFF` suivi d'un octet dont
+/// les trois bits hauts valent `0b111`).
+bool _hasMpegMagicNumber(Uint8List bytes) {
+  if (bytes.length < 4) {
+    return false;
+  }
+  final String tag = String.fromCharCodes(bytes.sublist(0, 3));
+  if (tag == 'ID3') {
+    return true;
+  }
+  return bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0;
 }
 
 /// Lit la durée d'un WAV PCM non compressé depuis son en-tête.

@@ -96,6 +96,10 @@ flutter:
   # Les dossiers sont dÃ©clarÃ©s en bloc, tout fichier qui y est ajoutÃ© est inclus.
   assets:
     - assets/catalog/
+    # Catalogue audio embarqué : démo du MVP + titres hors-ligne de
+    # Jethsonat (`jethsonat_0X.mp3`). Tout fichier déposé dans ce dossier est
+    # inclus automatiquement ; le chemin est donc à reporter tel quel dans
+    # `assets/catalog/catalog.json` (clé `audio_asset`).
     - assets/audio/
     - assets/covers/
     - assets/brand/

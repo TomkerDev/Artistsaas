@@ -17,29 +17,42 @@ import '../../domain/entities/track.dart';
 /// un bundle en mémoire au lieu de dépendre du regroupement d'assets produit par
 /// la compilation, ce qui rend la lecture testable sans Flutter.
 class LocalCatalogDataSource implements CatalogDataSource {
-  const LocalCatalogDataSource({
+  // Non-`const` : le filtre par artiste dérive de `AppConfig.artistId`, un
+  // getter calculé à partir de `--dart-define`, qui n'est pas une constante.
+  LocalCatalogDataSource({
     String assetPath = defaultAssetPath,
+    String? artistId,
     AssetBundle? bundle,
   })  : _assetPath = assetPath,
+        _filterArtistId = artistId ?? AppConfig.artistId,
         _bundle = bundle;
 
   /// Chemin du catalogue de l'artiste courant.
   static const String defaultAssetPath = AppConfig.catalogAssetPath;
 
   final String _assetPath;
+
+  /// Artiste auquel le catalogue est restreint ; `null` pour tout afficher.
+  final String? _filterArtistId;
+
   final AssetBundle? _bundle;
+
+  /// `true` si [track] relève de l'artiste filtré.
+  ///
+  /// Une piste dépourvue de `artistId` n'est attribuée à personne et reste donc
+  /// visible : la masquer viderait les catalogues de démonstration antérieurs à
+  /// l'introduction du champ. Les artistes réels déclarent toujours le champ.
+  bool _belongsToArtist(Track track) {
+    final String? filter = _filterArtistId;
+    if (filter == null || filter.isEmpty) {
+      return true;
+    }
+    final String? owner = track.artistId;
+    return owner == null || owner == filter;
+  }
 
   @override
   Future<List<Track>> fetchTracks() async {
-    // Application « 100 % audio » : le catalogue embarqué est volontairement
-    // ignoré. Le fichier `assets/catalog/catalog.json` étant **partagé** entre
-    // toutes les applications, il contient les titres d'autres artistes qu'il
-    // ne faut pas afficher ici. Les morceaux de l'artiste courant arrivent
-    // exclusivement de Firestore (voir `FirebaseCatalogDataSource`).
-    if (AppConfig.streamOnly) {
-      return const <Track>[];
-    }
-
     final String raw = await _readAsset();
     final Object? decoded = _decodeJson(raw);
     if (decoded is! List) {
@@ -49,7 +62,15 @@ class LocalCatalogDataSource implements CatalogDataSource {
       );
     }
 
-    return <Track>[for (final Object? entry in decoded) _parseEntry(entry)];
+    // Le catalogue est partagé : on ne conserve que les pistes de l'artiste
+    // courant, pour ne pas proposer les titres d'un autre artiste.
+    final List<Track> tracks = <Track>[
+      for (final Object? entry in decoded) _parseEntry(entry),
+    ];
+    return <Track>[
+      for (final Track track in tracks)
+        if (_belongsToArtist(track)) track,
+    ];
   }
 
   AssetBundle get _effectiveBundle => _bundle ?? rootBundle;

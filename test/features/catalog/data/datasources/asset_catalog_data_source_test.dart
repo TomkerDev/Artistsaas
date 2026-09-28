@@ -11,18 +11,18 @@ void main() {
   const String path = LocalCatalogDataSource.defaultAssetPath;
 
   LocalCatalogDataSource sourceWith(String content) => LocalCatalogDataSource(
-    bundle: InMemoryAssetBundle(<String, String>{path: content}),
-  );
+        bundle: InMemoryAssetBundle(<String, String>{path: content}),
+      );
 
   String encode(List<Map<String, dynamic>> entries) => jsonEncode(entries);
 
   Map<String, dynamic> rawTrack({String id = 'demo-01'}) => <String, dynamic>{
-    'id': id,
-    'title': 'Titre',
-    'artist': 'Artiste',
-    'duration_ms': 30000,
-    'audio_asset': 'assets/audio/$id.wav',
-  };
+        'id': id,
+        'title': 'Titre',
+        'artist': 'Artiste',
+        'duration_ms': 30000,
+        'audio_asset': 'assets/audio/$id.wav',
+      };
 
   group('AssetCatalogDataSource', () {
     test('lit les pistes du catalogue embarqué', () async {
@@ -92,6 +92,71 @@ void main() {
       );
 
       await expectLater(source.fetchTracks(), throwsA(isA<CatalogException>()));
+    });
+  });
+
+  // Le catalogue embarqué est partagé entre toutes les applications : sans
+  // cloisonnement, l'application de Jethsonat proposerait les titres de
+  // démonstration et ceux de Dilson.
+  group('cloisonnement par artiste', () {
+    Map<String, dynamic> owned(String id, String? artistId) =>
+        <String, dynamic>{...rawTrack(id: id), 'artistId': artistId};
+
+    LocalCatalogDataSource sourceFor(
+      List<Map<String, dynamic>> entries, {
+      required String artistId,
+    }) =>
+        LocalCatalogDataSource(
+          artistId: artistId,
+          bundle: InMemoryAssetBundle(<String, String>{
+            path: encode(entries),
+          }),
+        );
+
+    test('ne renvoie que les pistes de l\'artiste demandé', () async {
+      final LocalCatalogDataSource source = sourceFor(
+        <Map<String, dynamic>>[
+          owned('jethsonat-01', 'jethsonat'),
+          owned('jethsonat-02', 'jethsonat'),
+          owned('demo-01', 'novaa'),
+          owned('dilson-01', 'dilson_le_mustang'),
+        ],
+        artistId: 'jethsonat',
+      );
+
+      final List<Track> tracks = await source.fetchTracks();
+
+      expect(tracks, hasLength(2));
+      expect(
+        tracks.map((Track t) => t.id),
+        <String>['jethsonat-01', 'jethsonat-02'],
+      );
+    });
+
+    test('conserve les pistes sans artistId (catalogues de démo)', () async {
+      final LocalCatalogDataSource source = sourceFor(
+        <Map<String, dynamic>>[
+          owned('demo-01', null),
+          owned('jethsonat-01', 'jethsonat'),
+        ],
+        artistId: 'jethsonat',
+      );
+
+      final List<Track> tracks = await source.fetchTracks();
+
+      expect(tracks, hasLength(2));
+    });
+
+    test('un artistId nul désactive le filtre', () async {
+      final LocalCatalogDataSource source = sourceFor(
+        <Map<String, dynamic>>[
+          owned('jethsonat-01', 'jethsonat'),
+          owned('demo-01', 'novaa'),
+        ],
+        artistId: '',
+      );
+
+      expect(await source.fetchTracks(), hasLength(2));
     });
   });
 }
