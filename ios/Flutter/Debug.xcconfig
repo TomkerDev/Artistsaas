@@ -1,0 +1,10 @@
+#include "Generated.xcconfig"
+
+// Identifiants AdMob iOS. Laisse vides, la publicité est désactivée
+// (AdsConfig.adsEnabled == false). Le script de build injecte ces
+// variables ; en local, les exporter avant `flutter run`.
+ADMOB_IOS_APP_ID=
+ADMOB_IOS_BANNER_ID=
+
+// Texte affiché par iOS lors de la demande de suivi (ATT). À personnaliser.
+ADMOB_TRACKING_USAGE_DESCRIPTION=

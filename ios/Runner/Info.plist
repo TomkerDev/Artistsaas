@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<!-- Identifiant de l'application AdMob iOS. Renseigné par le script de
+	     build via ADMOB_IOS_APP_ID ; vide = publicité désactivée. -->
+	<key>GADApplicationIdentifier</key>
+	<string>$(ADMOB_IOS_APP_ID)</string>
+	<!-- Identifiant du bloc bannière, utilisé par AdBanner. -->
+	<key>GAD_BANNER_UNIT_ID</key>
+	<string>$(ADMOB_IOS_BANNER_ID)</string>
+	<!-- Réseaux SKAdNetwork : nécessaire à l'attribution des installations
+	     avec l'ATT (AppTrackingTransparency).
+
+	     ⚠ À COMPLÉTER AVANT PUBLICATION.
+	     La liste est mise à jour par Google et évolue (nouveaux acheteurs) :
+	     la recopier depuis la documentation officielle, section
+	     « SKAdNetworkItems », et ne pas l'inventer ici.
+	     https://developers.google.com/admob/ios/privacy/strategies
+
+	     Sans ces entrées, les annonces interstitielles iOS restent
+	     sous-remplies et l'attribution est dégradée — sans erreur visible,
+	     ce qui rend l'omission difficile à détecter.
+	     Format attendu pour chaque entrée :
+	       <dict>
+	         <key>SKAdNetworkIdentifier</key>
+	         <string>xxxxx.skadnetwork</string>
+	       </dict>
+	-->
+	<key>SKAdNetworkItems</key>
+	<array/>
+	<!-- Tracking : description affichée par iOS lors de la demande
+	     d'autorisation. À personnaliser avant publication ; le texte doit
+	     expliquer l'usage, sans jargon technique. -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>$(ADMOB_TRACKING_USAGE_DESCRIPTION)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Jethsonat</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Jethsonat</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

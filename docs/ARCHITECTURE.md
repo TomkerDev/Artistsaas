@@ -223,6 +223,40 @@ Points structurants :
   fois l'annonce chargée, pour éviter tout rechargement de mise en page.
 - `AdsService` gère l'interstitiel : chargement anticipé, cadence minimale de
   deux minutes entre deux affichages, et libération de l'annonce à la fermeture.
+  deux minutes entre deux affichages, et libération de l'annonce à la fermeture.
+
+### iOS : un seul artiste, en preuve de concept
+
+Contrairement à Android, iOS **n'est pas configuré en multi-artiste**. Le
+dossier `ios/` ne contient qu'une seule cible Xcode, qui produit un seul bundle
+`com.music.jethsonat`. C'est un choix assumé : distribuer les douze artistes
+exigerait douze configurations Xcode, et le mécanisme de flavors Gradle
+d'Android n'a pas d'équivalent direct.
+
+Le bundle id a volontairement été aligné sur la convention Android
+(`com.music.jethsonat`) plutôt que sur le nom généré par `flutter create`.
+
+Côté publicité, le même `AdsConfig` est utilisé — le code Dart n'a aucune
+branchement conditionnel de plateforme. Seule la configuration change :
+`Info.plist` référence `$(ADMOB_IOS_APP_ID)` et `$(ADMOB_IOS_BANNER_ID)`, valeurs
+déclarées dans `ios/Flutter/Debug.xcconfig` et `Release.xcconfig`, et injectées
+par `scripts/build_ipa.sh` (bash, macOS uniquement).
+
+**Avant toute publication iOS**, deux éléments manuels sont obligatoires et
+documentés dans le `Info.plist` lui-même :
+
+- `SKAdNetworkItems` est **vide**. La liste est mise à jour par Google et doit
+  être recopiée depuis la documentation officielle ; sans elle, l'attribution
+  se dégrade silencieusement. Cette valeur n'a volontairement pas été inventée
+  dans le dépôt.
+- `ADMOB_TRACKING_USAGE_DESCRIPTION` doit être personnalisé : iOS affiche ce
+  texte à l'utilisateur lors de la demande de suivi (ATT).
+
+Aucun build iOS n'a pu être exécuté : la compilation exige macOS et Xcode, la
+machine courante étant sous Windows. Seuls le XML du `Info.plist` et
+l'analyse Dart sont vérifiés.
+
+## Assets et contenu embarqué
 
 ## Assets et contenu embarqué
 

@@ -173,6 +173,11 @@ valeurs, et la bannière s'insère seule dans la coquille.
 
 Ni règle Firestore, ni index, ni écran à modifier.
 
+> **iOS n'est pas multi-artiste.** La cible iOS ne couvre que Jethsonat
+> (`com.music.jethsonat`). Ajouter un artiste pour iOS demanderait de dupliquer
+> la configuration Xcode : c'est hors du périmètre de ce document. Voir la
+> section « iOS » de `docs/ARCHITECTURE.md`.
+
 ## Contrôle avant livraison
 
 - [ ] `flutter analyze` sans erreur
