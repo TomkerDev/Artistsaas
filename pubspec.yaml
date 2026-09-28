@@ -105,17 +105,6 @@ flutter:
     - assets/brand/
     # IcÃ´nes sources de gÃ©nÃ©ration des icÃ´nes natives par artiste.
     - assets/icons/
-    # Contenus embarquÃ©s propres Ã  chaque artiste (distribuÃ©s via les flavors).
-    - assets/artists/artist_1/
-    - assets/artists/artist_2/
-    - assets/artists/artist_3/
-    - assets/artists/artist_4/
-    - assets/artists/artist_5/
-    - assets/artists/artist_6/
-    - assets/artists/artist_7/
-    - assets/artists/artist_8/
-    - assets/artists/artist_9/
-    - assets/artists/artist_10/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

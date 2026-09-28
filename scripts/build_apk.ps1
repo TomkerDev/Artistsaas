@@ -26,7 +26,7 @@
     des documents de la collection `tracks`.
 
 .PARAMETER ArtistFolder
-    Dossier d'assets de l'artiste sous `assets/artists/`.
+    Uniquement utilisé si `-ArtistId` est omis : `artist_1` dérive `artist1`.
 
 .PARAMETER StreamOnly
     Mode « 100 % streaming » : le catalogue embarqué est ignoré et tout

@@ -9,9 +9,9 @@ import '../../domain/entities/track.dart';
 
 /// Lit et décode le catalogue embarqué de l'artiste courant.
 ///
-/// Le chemin du fichier est dérivé de [AppConfig] : chaque build distribue le
-/// `catalog.json` de son artiste (`assets/artists/<dossier>/catalog.json`), la
-/// même base de code servant les dix applications.
+/// Le catalogue embarqué est **partagé** par toutes les applications : le même
+/// `assets/catalog/catalog.json` sert les dix artistes, et chaque build y
+/// applique le filtre [AppConfig.artistId] pour n'exposer que ses titres.
 ///
 /// Le chemin comme le `AssetBundle` restent injectables : les tests fournissent
 /// un bundle en mémoire au lieu de dépendre du regroupement d'assets produit par

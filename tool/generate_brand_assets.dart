@@ -51,17 +51,6 @@ void main() {
     stdout.writeln(path);
   }
 
-  // Métadonnées embarquées par artiste : garantit l'existence (et le contenu)
-  // des dossiers déclarés dans pubspec.yaml pour chaque flavor.
-  for (int index = 0; index < _artistCount; index++) {
-    final int number = index + 1;
-    final String path = 'assets/artists/artist_$number/artist.json';
-    final File file = File(path);
-    file.parent.createSync(recursive: true);
-    file.writeAsStringSync(_artistManifest(number));
-    stdout.writeln(path);
-  }
-
   // Pochette et icône officielles de Jethsonat (label Tete Roh Studio).
   // Elles ne sont pas « générées » au sens graphique : ce sont des
   // emplacements de marque que l'artiste remplace par son visuel officiel.
@@ -76,16 +65,6 @@ void main() {
 
   _writeImage('assets/icons/jethsonat_icon.png', 1024, _jethsonatIconPaint());
   stdout.writeln('assets/icons/jethsonat_icon.png');
-}
-
-/// Contenu JSON des métadonnées d'un artiste (numéro 1-based).
-String _artistManifest(int number) {
-  return '{\n'
-      '  "id": "artist$number",\n'
-      '  "name": "Artist $number",\n'
-      '  "applicationId": "com.music.artist$number",\n'
-      '  "icon": "assets/icons/artist_${number}_icon.png"\n'
-      '}\n';
 }
 
 /// Nombre d'artistes exposés (aligné sur les flavors `artist1`..`artistN`).

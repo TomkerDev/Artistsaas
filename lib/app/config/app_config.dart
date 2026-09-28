@@ -3,9 +3,16 @@
 /// L'identité distribuée est choisie au moment du build via `--dart-define` :
 ///
 /// ```sh
-/// flutter build apk --flavor artist3 --dart-define=ARTIST_FOLDER=artist_3
+/// flutter build apk --flavor jethsonat --dart-define=ARTIST_ID=jethsonat
 /// flutter run --flavor artist1 --dart-define=ARTIST_FOLDER=artist_1
 /// ```
+///
+/// Deux notions à ne pas confondre :
+/// - `ARTIST_ID` : l'identité canonique (`jethsonat`), alignée sur
+///   `ArtistProfile.id` et sur le champ Firestore `artistId`. **C'est elle qui
+///   détermine le contenu affiché.**
+/// - `ARTIST_FOLDER` : le dossier d'assets (`artist_1`, …), utile uniquement
+///   pour d'éventuels contenus embarqués propres à un artiste.
 ///
 /// Sans `--dart-define`, l'application retombe sur `artist_1`, ce qui permet de
 /// lancer le projet sans configuration supplémentaire. Les chemins exposés ici
@@ -19,26 +26,22 @@ import '../../core/constants/artist_config.dart';
 abstract final class AppConfig {
   /// Dossier de l'artiste courant, défini via `--dart-define=ARTIST_FOLDER=…`.
   ///
-  /// La valeur attendue correspond à un dossier sous `assets/artists/`
-  /// (`artist_1`, `artist_2`, … `artist_10`).
+  /// Sert uniquement à [artistId] lorsque `ARTIST_ID` n'est pas fourni :
+  /// le format `artist_1` devient `artist1`. Aucun asset n'est lu depuis
+  /// `assets/artists/<dossier>/` — le catalogue est partagé et filtré par
+  /// `artistId` (voir [catalogAssetPath]).
   static const String artistFolder = String.fromEnvironment(
     'ARTIST_FOLDER',
     defaultValue: 'artist_1',
   );
 
-  /// Racine des contenus embarqués de l'artiste courant.
-  static const String artistAssetsRoot = 'assets/artists/$artistFolder';
-
   /// Catalogue musical de l'artiste courant.
   ///
-  /// À ce jour, le catalogue est **partagé** entre les dix applications
-  /// (`assets/catalog/catalog.json`) ; les dossiers d'artiste ne portent que
-  /// l'identité (`artist.json`). Le chemin reste centralisé ici pour qu'un
-  /// catalogue par artiste ne soit qu'un changement local.
+  /// Le catalogue est **partagé** entre toutes les applications
+  /// (`assets/catalog/catalog.json`) ; il est cloisonné par `artistId` au
+  /// moment de la lecture (voir `LocalCatalogDataSource`), afin qu'un artiste
+  /// ne voie pas les titres d'un autre.
   static const String catalogAssetPath = 'assets/catalog/catalog.json';
-
-  /// Configuration de l'artiste courant (identité, thème, réglages).
-  static const String configAssetPath = '$artistAssetsRoot/config.json';
 
   /// Identifiant de l'artiste utilisé par la source distante (Firestore).
   ///

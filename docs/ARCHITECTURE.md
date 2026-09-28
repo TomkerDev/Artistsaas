@@ -1,238 +1,252 @@
+onglets billetterie et boutique : titres, concerts et articles restent ainsi
+rattachés au même artiste.
+
 # Architecture du projet
 
-Ce document décrit en détail l'organisation du code de **Artistsaas**, une
-application Android (Flutter) qui diffuse le catalogue musical d'un artiste :
-lecture intégrée, téléchargement local, écoute hors connexion.
+Organisation du code de **Artistsaas** : deux binaires (application Android et
+panneau d'administration web) construits depuis une base de code unique.
+
+> Ce document décrit l'état **courant** du code. La procédure d'ajout d'un
+> artiste est dans [`ONBOARDING_ARTISTE.md`](ONBOARDING_ARTISTE.md).
 
 ## Vue d'ensemble
 
 ```
 lib/
-├── main.dart                            # entrée « application artiste » (Android)
-├── main_admin.dart                      # entrée « panneau d'administration » (Flutter Web)
-├── firebase_options.dart                # options Firebase par plateforme (--dart-define)
-├── admin/                               # écrans du panneau d'administration
-│   ├── admin_login_page.dart            # connexion Firebase Auth (e-mail + mot de passe)
-│   └── admin_upload_page.dart           # publication d'un titre (audio + pochette)
-├── services/
-│   └── supabase_storage_service.dart    # client Supabase Storage (bucket `artist-media`)
-├── app/
-│   ├── artist_app.dart                  # MaterialApp : thème, locale fr, coquille
-│   ├── di/
-│   │   └── app_providers.dart           # composition root (injection Riverpod)
-│   ├── shell/
-│   │   └── home_shell.dart              # coquille à 3 onglets (Accueil/Lecteur/Ma musique)
-│   └── theme/
-│       └── app_theme.dart               # thème clair et sombre
+├── main.dart                            # binaire ARTISTE (Android)
+├── main_admin.dart                      # binaire ADMIN (Flutter Web)
+├── firebase_options.dart                # clés Firebase (--dart-define)
+│
 ├── core/
-│   ├── constants/app_strings.dart       # libellés de l'interface
+│   ├── constants/
+│   │   ├── artist_config.dart           # ★ REGISTRE DES ARTISTES
+│   │   └── app_strings.dart             # libellés de l'interface
 │   ├── errors/app_exception.dart        # erreur applicative transverse
-│   └── utils/                           # collections.dart, duration_formatter.dart
-└── features/
-    ├── catalog/                         # catalogue musical        → écran Accueil
-    ├── player/                          # moteur audio et lecture  → écran Lecteur
-    └── library/                         # téléchargements          → écran Ma musique
+│   └── utils/                           # byte_formatter, collections, duration_formatter
+│
+├── app/
+│   ├── config/app_config.dart           # ★ variables de compilation
+│   ├── di/app_providers.dart            # composition root (Riverpod)
+│   ├── shell/
+│   │   ├── home_shell.dart              # coquille à 5 onglets
+│   │   └── mini_player.dart             # barre de lecture persistante
+│   └── theme/                           # app_colors, app_theme
+│
+├── features/                            # un dossier par domaine
+│   ├── catalog/     (12 fichiers)       # Track, catalogue embarqué + Firestore → Accueil
+│   ├── player/      (10 fichiers)       # moteur audio, file de lecture    → Lecteur
+│   ├── library/     ( 6 fichiers)       # téléchargements                   → Ma musique
+│   ├── favorites/   ( 6 fichiers)       # favoris (sqflite)
+│   ├── store/       ( 5 fichiers)       # events, merch, tickets   → Boutique & Show
+│   └── platform/    ( 1 fichier )       # service de partage
+│
+├── admin/                               # écrans du panneau (web)
+│   ├── admin_login_page.dart            # connexion Firebase Auth
+│   ├── admin_identity.dart              # ★ rôle + artiste (admin_users)
+│   ├── admin_routes.dart                # sélecteur d'artiste (dérivé du registre)
+│   ├── admin_upload_page.dart           # publication audio + KPI
+│   └── admin_store_page.dart            # Dashboard, profil, billetterie, boutique
+│
+└── services/supabase_storage_service.dart
 ```
+
+Chaque dossier de `features/` suit la même découpe en couches, avec une règle de
+dépendance stricte :
+
+```
+presentation/  →  app/di  →  data/  →  domain/
+```
+
+`domain/` n'importe rien du projet ; `presentation/` et `data/` s'appuient
+dessous, jamais l'inverse.
 
 ## Deux points d'entrée
 
-Le dépôt produit deux binaires à partir de la même base de code :
-
 | Fichier | Cible | Rôle |
 | --- | --- | --- |
-| `lib/main.dart` | Android (les 12 flavors) | application artiste : catalogue, lecteur, téléchargements |
-| `lib/main_admin.dart` | Flutter Web (Firebase Hosting) | panneau d'administration : Auth, publication de titres |
+| `lib/main.dart` | Android (12 flavors) | catalogue, lecteur, boutique, à propos |
+| `lib/main_admin.dart` | Flutter Web (Firebase Hosting) | publication, billetterie, merch |
 
 Le binaire artiste n'embarque **jamais** les écrans d'administration : la
-séparation est faite au niveau du point d'entrée, pas par un drapeau d'exécution.
+séparation est faite au niveau du point d'entrée, pas par un drapeau
+d'exécution.
+
+### Identité de l'artiste
+
+`ARTIST_ID` (via `--dart-define`) détermine la fiche artiste, le filtre Firestore
+et le contenu affiché ; `ARTIST_FOLDER` ne sert qu'aux contenus embarqués. Le
+détail est dans [`ONBOARDING_ARTISTE.md`](ONBOARDING_ARTISTE.md).
+
+## Modèle de données Firestore
+
+Cinq collections, cloisonnées par `artistId` côté requête.
+
+| Collection | Écrit par | Lue par | Index |
+| --- | --- | --- | --- |
+| `tracks` | panneau (upload) | application | `artistId` + `createdAt` |
+| `events` | panneau (billetterie) | application | `artistId` + `date` |
+| `merch` | panneau (boutique) | application | `artistId` + `name` |
+| `tickets` | application (public) | application, panneau | `event_id` |
+| `admin_users` | console Firebase | panneau | — |
+
+Les règles (`firestore.rules`) déclarent les cinq collections : lecture publique
+pour le contenu, écriture authentifiée pour la publication. Sur `tickets`, un
+client ne peut créer qu'un billet `pending` et ne modifier que le `status` — un
+QR code validé ne peut pas être réécrit par le public. `admin_users` est en
+lecture seule : un compte ne peut pas s'attribuer `agency_admin` lui-même.
 
 ## Panneau d'administration (web)
 
 | Élément | Détail |
 | --- | --- |
-| Authentification | Firebase Auth, e-mail + mot de passe (`signInWithEmailAndPassword`) |
-| Médias lourds | Supabase Storage, bucket public `artist-media`, chemin `<artistId>/<fichier>` |
-| Métadonnées | Cloud Firestore, collection `tracks` (titre, album, numéro de piste, année, URLs) |
-| Sélection de fichiers | `file_picker` (MP3 + pochette) |
-| Navigation | routes `MaterialApp` : `/admin/login` et `/admin/upload` |
+| Authentification | Firebase Auth, e-mail + mot de passe |
+| Rôle / artiste | document `admin_users/{uid}`, lu une fois et partagé (`AdminIdentity`) |
+| Médias lourds | Supabase Storage, bucket `artist-media`, chemin `<artistId>/<fichier>` |
+| Métadonnées | Cloud Firestore (voir le tableau des collections) |
+| Navigation | `NavigationRail` : Dashboard, Catalogue & Upload, Boutique & Shows, Profil, Paramètres |
 
-`lib/services/supabase_storage_service.dart` crée son client **paresseusement**
-au premier téléversement et lit ses paramètres dans des constantes
+`SupabaseStorageService` lit ses paramètres dans des constantes
 `String.fromEnvironment` (voir le piège `const` dans le README). `main_admin.dart`
 n'initialise `Supabase.initialize` que si les deux valeurs sont présentes, afin
 qu'un build sans `--dart-define=SUPABASE_*` démarre quand même et affiche
 l'erreur au moment de l'upload plutôt qu'au lancement.
 
-### Section KPI — indicateurs clés de performance
+### Publication : le `artistId` ne peut pas être oublié
 
-Le panneau affiche une grille de **4 cartes KPI** en temps réel en haut de
-`admin_upload_page.dart` :
+Toutes les écritures passent par des services dédiés qui posent le champ
+`artistId` et valident le schéma — `StoreAdminService` pour la billetterie et le
+merch, `admin_upload_page.dart` pour les titres.
 
-| Carte | Source | Description |
+> Sans ce champ, un document publié resterait **invisible** : toutes les requêtes
+> mobiles filtrent sur `artistId`. C'était le défaut le plus coûteux du panneau,
+> aujourd'hui couvert par les règles Firestore et les tests.
+
+### Section KPI
+
+`admin_upload_page.dart` affiche **4 cartes** en temps réel, pour l'artiste
+courant : titres en ligne, albums & singles, artiste, dernier ajout.
+
+### Filtrage par rôle
+
+Un seul identifiant pilote toutes les requêtes du panneau, `_effectiveArtistId` :
+
+- rôle **`artist`** : verrouillé sur `assignedArtistId`, le sélecteur est
+  désactivé et la requête ne peut pas sortir de ce périmètre ;
+- rôle **`agency_admin`** : la liste déroulante est active et la bascule entre
+  artistes recalcule la requête.
+
+L'artiste sélectionné est publié via `shellArtistIdNotifier`, que consomment les
+onglets billetterie et boutique : titres, concerts et articles restent ainsi
+rattachés au même artiste.
+
+## Fonctionnalités mobiles
+
+`home_shell.dart` expose **5 onglets** :
+
+| Onglet | Écran | Contenu |
 | --- | --- | --- |
-| Titres en ligne | `tracks` | Nombre total de morceaux publiés |
-| Albums & Singles | `tracks.album` | Nombre d'albums/singles distincts |
-| Artiste / Total Artistes | `tracks.artistId` | Nom de l'artiste (rôle `artist`) ou total d'artistes (rôle `agency_admin` global) |
-| Dernier Ajout | `tracks.createdAt` | Titre + date du dernier morceau ajouté |
+| Accueil | `HomeScreen` | header (pochette, nom, crédit de label) + catalogue |
+| Lecteur | `PlayerScreen` | pochette, progression, contrôles, arrêt, partage |
+| Ma musique | `MyMusicScreen` | titres téléchargés, taille, suppression |
+| Boutique & Show | `StoreShowScreen` | concerts à venir + catalogue merch |
+| À Propos | `AboutArtistScreen` | biographie, distinction, réseaux, version |
 
-**Filtrage par rôle** :
+### Catalogue : trois sources combinées
 
-- `agency_admin` + `assignedArtistId == 'all'` : écoute sur la collection
-  `tracks` complète (tous les artistes) ;
-- `artist` ou `agency_admin` avec artiste spécifique : écoute filtrée par
-  `where('artistId', isEqualTo: _selectedArtistId)`.
+`TrackRepositoryImpl` fusionne :
 
-> Le `StreamBuilder` se reconnecte automatiquement quand `_selectedArtistId`
-> change (changement d'artiste dans le dropdown), ce qui rafraîchit les
-> cartes KPI sans recharger la page.
+1. le catalogue embarqué (`catalog.json`), **cloisonné par `artistId`** ;
+2. les nouveautés Firestore (une erreur distante est absorbée : les titres
+   embarqués restent accessibles) ;
+3. l'état de téléchargement local (`sqflite`).
 
-**Responsive** : la grille utilise `LayoutBuilder` + `Wrap` pour afficher 4
-colonnes sur web/PC et une grille 2×2 sur mobile. Un squelette de chargement
-(`_kpiLoadingSkeleton` avec `CircularProgressIndicator`) est affiché pendant
-l'attente du premier snapshot Firestore ou pendant le chargement du rôle.
+Un artiste peut déclarer `STREAM_ONLY=true` pour ignorer le catalogue embarqué et
+ne lire que Firestore. Par défaut (`false`), le catalogue est **hybride** :
+titres embarqués jouables hors-ligne + nouveautés distantes.
 
-## Distribution multi-artistes
+> `catalog.json` étant **partagé**, le cloisonnement par `artistId` est
+> indispensable : sans lui, l'application d'un artiste proposerait les titres
+> des autres.
 
-Une seule base de code produit **une application par artiste** :
+### Résolution de la source audio
 
-- `android/app/build.gradle.kts` déclare `flavorDimensions += "artist"` et douze
-  *product flavors* (`dilson_le_mustang`, `jethsonat`, `artist1`…`artist10`),
-  chacun fixant son `applicationId` (`com.music.<flavor>`) et son nom affiché
-  (`resValue("string", "app_name", …)`) ;
-- `flutter_launcher_icons.yaml` porte le bloc `flavors` et
-  `tool/generate_brand_assets.dart` génère les icônes et visuels de marque ;
-- l'identité embarquée de chaque artiste est un simple
-  `assets/artists/<dossier>/artist.json` (`id`, `name`, `applicationId`, `icon`) ;
-- le catalogue audible est **partagé** (`assets/catalog/catalog.json`) tandis que
-  les titres réellement publiés proviennent de Firestore, filtrés par identifiant
-  d'artiste.
+`DefaultPlaybackSourceResolver` applique une priorité stricte :
 
-Le nom du flavor n'est **pas** transmis au code Dart : aucune exécution ne lit
-`--dart-define=ARTIST_FOLDER`, l'identité affichée vient du flavor Android et le
-contenu distant de Firestore.
+```
+copie locale téléchargée  →  URL distante (audioUrl)  →  audio_asset embarqué
+```
 
-## Principes
+`just_audio` consomme le résultat : `FilePlaybackSource → AudioSource.file`,
+`NetworkPlaybackSource → AudioSource.uri`, `AssetPlaybackSource →
+AudioSource.asset`.
 
-### 1. Clean architecture par feature
+### Lecture en arrière-plan
 
-Chaque feature est découpée en trois couches, avec un sens de dépendance
-strict : `presentation → domain ← data`.
+`just_audio_background` + `audio_service` : notification média, contrôles
+casque/Bluetooth, écran de verrouillage. L'action d'arrêt coupe le flux et retire
+la notification (`androidStopForegroundOnPause`).
 
-| Couche | Contenu | Interdits |
-| --- | --- | --- |
-| `domain/` | entités, interfaces (`Repository`, `Service`, `DataSource`) | aucune dépendance à Flutter, `just_audio`, `sqflite` ou au système de fichiers |
-| `data/` | implémentations concrètes (assets, fichiers, base de données) | n'importe jamais `presentation/` ni `app/` |
-| `presentation/` | écrans, contrôleurs Riverpod, widgets | ne parle jamais directement au stockage ou au moteur audio |
+### Billetterie et boutique
 
-### 2. La composition root est unique
+`StoreShowScreen` observe `StoreRepository` via Riverpod
+(`store_providers.dart`) : chaque section affiche un état de chargement, une
+erreur avec action « Réessayer », et un état vide explicite. Une panne réseau
+reste ainsi distinguable d'un catalogue vide.
 
-`lib/app/di/app_providers.dart` est le **seul** endroit où les implémentations
-concrètes sont choisies. Passer d'un catalogue embarqué à une API distante
-(NestJS/PostgreSQL) revient à y fournir une nouvelle implémentation de
-`CatalogDataSource` / `MusicRepository`, sans toucher aux écrans.
-
-### 3. État via Riverpod 2.x
-
-Les contrôleurs étendent `AsyncNotifier` (ex. `CatalogController`) et exposent
-des `AsyncValue` (`loading` / `error` / `data`). Les écrans n'appellent jamais
-le repository : ils observent les providers.
-
-## Features
-
-### `catalog` — catalogue musical (complet)
-
-- `domain/entities/track.dart` : modèle `Track` (id, titre, durée, source audio…)
-- `domain/datasources/catalog_data_source.dart` : contrat de lecture brute
-- `domain/repositories/music_repository.dart` : contrat `getTracks()`
-- `data/datasources/asset_catalog_data_source.dart` : lit `assets/catalog/catalog.json`
-- `data/repositories/music_repository_impl.dart` : implémente le contrat avec mise en cache
-- `presentation/` : `CatalogController` (état async), `HomeScreen`, `TrackListTile`
-
-### `player` — moteur audio (complet)
-
-- `domain/entities/` : `PlaybackMedia`, `PlaybackSource` (sealed : asset /
-  fichier / réseau), `PlaybackState`
-- `domain/services/audio_player_service.dart` : interface du moteur (queue,
-  play/pause, seek, skip, flux d'état). Les erreurs d'exécution sont publiées
-  dans `PlaybackState.errorMessage` plutôt que levées.
-- `domain/services/playback_source_resolver.dart` : contrat de résolution des
-  sources (copie locale → distant → embarqué)
-- `data/just_audio_player_service.dart` : implémentation `just_audio` — seul
-  endroit de l'application qui connaît la bibliothèque de lecture
-- `data/default_playback_source_resolver.dart` : applique la règle de priorité
-- `presentation/` : `PlaybackController` (file, commandes, état),
-  `PlayerScreen` (pochette, barre de progression avec seek, contrôles,
-  erreur acquittable)
-
-### `library` — téléchargements (complet)
-
-- `domain/entities/downloaded_track.dart` / `download_progress.dart`
-- `domain/repositories/download_repository.dart` : contrat (flux de copies,
-  téléchargement, suppression, chemin local)
-- `data/local_download_repository.dart` : copie des assets vers
-  `<documents>/downloads/<id>.<ext>` par blocs de 64 Ko (progression réelle),
-  indexation `sqflite` (`<databases>/artistsaas.db`, table `downloaded_tracks`)
-- `presentation/` : `downloadedTracksProvider` / `downloadProgressProvider`,
-  `MyMusicScreen` (liste avec taille et date, lecture, suppression confirmée)
-
-### `app/shell` — coquille et mini-lecteur
-
-- `home_shell.dart` : `IndexedStack` + `NavigationBar` ; l'onglet actif est
-  partagé via `selectedTabNotifier` pour permettre la navigation depuis le
-  mini-lecteur
-- `mini_player.dart` : barre persistante (progression, titre, play/pause,
-  suivant) affichée dès qu'un morceau est en file ; un tap ouvre le lecteur
+Les concerts passés sont masqués côté client ; ceux dont la date est inconnue sont
+conservés, l'organisateur n'ayant pas encore fixé la date.
 
 ## Assets et contenu embarqué
 
 | Chemin | Contenu |
 | --- | --- |
-| `assets/catalog/catalog.json` | catalogue embarqué (partagé par tous les artistes) |
-| `assets/audio/demo-0*.wav` | audio de démonstration |
-| `assets/covers/cover-0*.png` | pochettes de démonstration |
-| `assets/artists/artist_1…10/artist.json` | identité embarquée de chaque artiste |
-| `assets/brand/` | logo et icône source de la marque |
-| `assets/icons/artist_*_icon.png` | icônes générées par artiste |
+| `assets/catalog/catalog.json` | catalogue partagé, cloisonné par `artistId` |
+| `assets/audio/jethsonat_0*.mp3` | titres hors-ligne de Jethsonat |
+| `assets/audio/demo-*.wav`, `dilson_*.m4a` | audio de démonstration |
+| `assets/covers/` | pochettes, dont `jethsonat_cover.png` |
+| `assets/icons/` | icônes de lancement par artiste |
 
-Scripts de génération (à relancer uniquement quand les sources changent) :
+Il n'y a plus de dossier `assets/artists/` : le catalogue est unique et cloisonné
+par `artistId`, donc aucun asset n'est propre à un artiste. `ARTIST_FOLDER` ne
+sert plus qu'à dériver `artistId` par défaut.
 
-- `dart run tool/generate_demo_audio.dart` — audio de démonstration ;
-- `dart run tool/generate_brand_assets.dart` — visuels et icônes par flavor.
+Scripts de génération (à relancer seulement quand les sources changent) :
 
-Le catalogue embarqué est **versionné dans le dépôt** : toute modification passe
-par une nouvelle version de l'application (voir les conséquences dans le README).
-Les titres publiés après coup passent par Firestore et Supabase Storage, donc
-sans nouvelle version de l'application.
+- `dart run tool/generate_demo_audio.dart` — démo WAV + hors-ligne MP3, avec
+  vérification des durées par `ffprobe` ;
+- `dart run tool/generate_brand_assets.dart` — visuels, icônes, placeholder de
+  pochette Jethsonat.
 
 ## Tests
 
-La suite (`flutter test`) couvre chaque couche :
+`flutter test` couvre chaque couche :
 
-- `test/app/` : widget test de la racine applicative ;
-- `test/assets/` : validité du `catalog.json` embarqué ;
-- `test/core/` : utilitaires (`collections`, `duration_formatter`) ;
-- `test/features/…` : entités, sources de données, repositories, contrôleurs, écrans ;
-- `test/helpers/fakes.dart` : doublures réutilisables des interfaces de `domain/`.
+- `test/app/` — racine applicative, navigation entre onglets ;
+- `test/assets/` — validité du `catalog.json` embarqué (fichiers, durées) ;
+- `test/core/` — registre des artistes, utilitaires ;
+- `test/features/…` — entités, sources, repositories, contrôleurs, écrans ;
+- `test/helpers/` — `fakes.dart` (domaine audio) et `fakes_store.dart` (boutique).
 
-## Dette technique
+Les écrans de boutique et de billetterie sont testés via un faux dépôt injecté
+par `storeRepositoryProvider` : les tests ne dépendent pas de Firestore et
+vérifient notamment l'absence de données codées en dur.
 
-- `lib/features/admin/` (7 fichiers : `AdminAuthService`, `TrackPublisher`, leurs
-  implémentations Firebase, `admin_login_page.dart`, `admin_upload_page.dart`,
-  `admin_providers.dart`) est **entièrement orphelin** : plus aucun `import` ne
-  le référence depuis que le panneau vit dans `lib/admin/` et `lib/services/`.
-  À supprimer.
-- `lib/admin/admin_routes.dart` (`AdminScreenIds`, `AdminArtistOption`,
-  `allAdminArtists`) n'est importé nulle part : la liste des artistes est
-  dupliquée en dur dans `admin_upload_page.dart`. À supprimer ou à réutiliser.
-- `lib/app/config/app_config.dart` (`AppConfig`) n'est pas utilisé : aucun build
-  ne définit `ARTIST_FOLDER` et `AppConfig.configAssetPath` pointe vers un
-  `assets/artists/<dossier>/config.json` qui n'existe pas (seul `artist.json`
-  subsiste). Sans danger aujourd'hui, mais à retirer ou à brancher.
+## Dette technique connue
+
+- `user_id` vaut `'anonymous-device'` pour les billets : l'authentification du
+  public n'existe pas encore. Seuls le contrôle au guichet et la confirmation
+  manuelle protègent une entrée.
+- `event.date` est désormais un `Timestamp` ; les anciens documents à chaîne
+  restent lisibles mais ne se trient pas, et les règles refusent toute écriture
+  dessus. Une migration est nécessaire s'il en existe.
 
 ## Évolutions prévues
 
-1. Supprimer la dette technique ci-dessus (fichiers orphelins et doublons).
-2. Générer les APK des dix autres flavors (`artist1`…`artist10`).
-3. Mettre en place une vraie signature de release : `android/app/build.gradle.kts`
-   signe encore avec la clé de debug (`signingConfigs.getByName("debug")`).
-4. Publier sur le Play Store (`flutter build appbundle --release`).
+1. Authentification du public, pour remplacer `user_id` en dur.
+2. Confirmation du paiement Mobile Money (le billet est déjà un vrai document,
+   mais la transaction opérateur n'est pas vérifiée).
+3. Signature de release : `android/app/build.gradle.kts` bascule encore sur la
+   clé de debug en l'absence de `android/key.properties`.
+4. Publication sur le Play Store (`flutter build appbundle --release`).
+5. Déplacer le registre `artistProfiles` vers Firestore, pour onboard un
+   artiste sans modification de code.
