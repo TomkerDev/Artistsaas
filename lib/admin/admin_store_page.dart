@@ -3,6 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/constants/artist_config.dart';
+import '../features/store/data/store_admin_service.dart';
+import '../features/store/data/store_repository.dart';
+import '../features/store/domain/store_models.dart';
+import 'admin_identity.dart';
 import 'admin_routes.dart';
 import 'admin_upload_page.dart';
 
@@ -492,34 +496,117 @@ class _EventFormState extends State<_EventForm> {
   final _vip = TextEditingController();
   final _money = TextEditingController();
   final _seats = TextEditingController();
+
+  /// Identité du compte connecté, pour connaître l'artiste de publication.
+  final ValueNotifier<AdminIdentity?> _identity = adminIdentityNotifier;
+
+  bool _saving = false;
+
+  /// Flux des concerts publiés pour l'artiste courant.
+  ///
+  /// `null` tant que l'identité n'est pas résolue : sans artiste connu, la
+  /// requête `where('artistId', isEqualTo: null)` listerait les documents sans
+  /// artiste — à éviter.
+  Stream<List<ShowEvent>>? _eventsStream() {
+    final String? artistId = _artistId;
+    if (artistId == null) {
+      return null;
+    }
+    return StoreRepository().watchEvents(artistId: artistId);
+  }
+
   @override
   void dispose() {
-    for (final c in [_title, _date, _location, _std, _vip, _money, _seats]) {
+    for (final c in [
+      _title,
+      _date,
+      _location,
+      _std,
+      _vip,
+      _money,
+      _seats,
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  /// Artiste de publication, ou `null` si aucun n'est résolu.
+  ///
+  /// Un compte d'artiste est verrouillé sur son `assignedArtistId` ; un compte
+  /// d'agence suit l'artiste choisi dans la barre latérale, que le panneau
+  /// publie via [shellArtistIdNotifier].
+  String? get _artistId {
+    final AdminIdentity? identity = _identity.value;
+    if (identity == null || !identity.isResolved) {
+      return null;
+    }
+    if (!identity.isAgencyAdmin) {
+      return identity.assignedArtistId;
+    }
+    return shellArtistIdNotifier.value;
+  }
+
   Future<void> _save() async {
-    if (!_form.currentState!.validate()) return;
-    await FirebaseFirestore.instance.collection('events').add(<String, Object?>{
-      'title': _title.text.trim(),
-      'date': _date.text.trim(),
-      'location': _location.text.trim(),
-      'price_std': double.parse(_std.text),
-      'price_vip': double.parse(_vip.text),
-      'mobile_money_number': _money.text.trim(),
-      'total_seats': int.parse(_seats.text),
-      'created_at': FieldValue.serverTimestamp(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Événement enregistré.')));
-      for (final c in [_title, _date, _location, _std, _vip, _money, _seats]) {
+    if (!_form.currentState!.validate()) {
+      return;
+    }
+    final String? artistId = _artistId;
+    if (artistId == null) {
+      _toast('Choisissez un artiste avant de publier.');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await StoreAdminService(FirebaseFirestore.instance).createEvent(
+        artistId: artistId,
+        title: _title.text,
+        // La date est saisie au format ISO ; `date_label` conserve la
+        // formulation retenue pour l'affichage.
+        date: DateTime.parse(_date.text.trim()),
+        dateLabel: _date.text.trim(),
+        location: _location.text,
+        priceStd: double.parse(_std.text.trim()),
+        priceVip: double.parse(_vip.text.trim()),
+        mobileMoneyNumber: _money.text,
+        totalSeats: int.parse(_seats.text.trim()),
+      );
+      if (!mounted) {
+        return;
+      }
+      _toast('Événement enregistré.');
+      for (final c in [
+        _title,
+        _date,
+        _location,
+        _std,
+        _vip,
+        _money,
+        _seats,
+      ]) {
         c.clear();
       }
+    } on FormatException {
+      _toast('Date ou nombre invalide (format de date attendu : 2026-07-18).');
+    } on StateError catch (error) {
+      _toast(error.message);
+    } on FirebaseException catch (error) {
+      _toast('Publication refusée : ${error.message}');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
+  }
+
+  void _toast(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -528,33 +615,67 @@ class _EventFormState extends State<_EventForm> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: <Widget>[
+            ValueListenableBuilder<AdminIdentity?>(
+              valueListenable: _identity,
+              builder: (BuildContext context, AdminIdentity? identity, _) =>
+                  _ArtistBanner(artistId: _artistId),
+            ),
+            const SizedBox(height: 12),
+            _PublishedList<ShowEvent>(
+              title: 'Concerts publiés',
+              emptyMessage:
+                  'Aucun concert publié pour cet artiste. Les événements '
+                  'apparaîtront dans l\'application mobile.',
+              stream: _eventsStream(),
+              describe: (ShowEvent event) =>
+                  '${event.title} · ${event.displayDate}',
+              onDelete: (ShowEvent event) =>
+                  StoreAdminService(FirebaseFirestore.instance).deleteEvent(
+                    event.id,
+                  ),
+            ),
+            const Divider(height: 32),
+            const Text(
+              'Nouveau concert',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'Titre'),
+              validator: _required,
             ),
             TextFormField(
               controller: _date,
-              decoration: const InputDecoration(labelText: 'Date'),
+              decoration: const InputDecoration(
+                labelText: 'Date',
+                helperText: 'Format ISO : 2026-07-18',
+              ),
+              validator: _dateValidator,
             ),
             TextFormField(
               controller: _location,
               decoration: const InputDecoration(labelText: 'Lieu'),
+              validator: _required,
             ),
             Row(
-              children: [
+              children: <Widget>[
                 Expanded(
                   child: TextFormField(
                     controller: _std,
                     keyboardType: TextInputType.number,
                     decoration:
                         const InputDecoration(labelText: 'Prix standard'),
+                    validator: _positiveNumber,
                   ),
                 ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
                     controller: _vip,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(labelText: 'Prix VIP'),
+                    validator: _positiveNumber,
                   ),
                 ),
               ],
@@ -563,20 +684,235 @@ class _EventFormState extends State<_EventForm> {
               controller: _money,
               decoration:
                   const InputDecoration(labelText: 'Numéro Mobile Money'),
+              validator: _required,
             ),
             TextFormField(
               controller: _seats,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Nombre de places'),
+              validator: _positiveNumber,
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _save,
-              child: const Text('Enregistrer l’événement'),
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Enregistrer l’événement'),
             ),
           ],
         ),
       );
+
+  static String? _required(String? value) =>
+      (value == null || value.trim().isEmpty) ? 'Champ obligatoire' : null;
+
+  static String? _positiveNumber(String? value) {
+    final double? parsed = double.tryParse((value ?? '').trim());
+    if (parsed == null || parsed <= 0) {
+      return 'Nombre positif attendu';
+    }
+    return null;
+  }
+
+  static String? _dateValidator(String? value) {
+    final String raw = (value ?? '').trim();
+    if (raw.isEmpty) {
+      return 'Champ obligatoire';
+    }
+    if (DateTime.tryParse(raw) == null) {
+      return 'Format attendu : 2026-07-18';
+    }
+    return null;
+  }
+}
+
+/// Liste des documents déjà publiés, avec suppression.
+///
+/// Sans elle, le panneau ne permettrait que de publier : impossible de vérifier ce
+/// qui est en ligne, ni de retirer un concert terminé. Les onglets
+/// « Événements » et « Articles » affichent donc l'état réel des collections
+/// au-dessus du formulaire de création.
+///
+/// Un [stream] `null` (artiste non résolu) n'affiche rien plutôt qu'une liste
+/// potentiellement faussée.
+class _PublishedList<T> extends StatelessWidget {
+  const _PublishedList({
+    required this.title,
+    required this.emptyMessage,
+    required this.stream,
+    required this.describe,
+    required this.onDelete,
+  });
+
+  final String title;
+  final String emptyMessage;
+  final Stream<List<T>>? stream;
+  final String Function(T item) describe;
+  final Future<void> Function(T item) onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final Stream<List<T>>? source = stream;
+    if (source == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<List<T>>(
+          stream: source,
+          builder: (BuildContext context, AsyncSnapshot<List<T>> snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.all(8),
+                child: LinearProgressIndicator(),
+              );
+            }
+            if (snapshot.hasError) {
+              return Text(
+                'Liste indisponible : ${snapshot.error}',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              );
+            }
+            final List<T> items = snapshot.data ?? <T>[];
+            if (items.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  emptyMessage,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              );
+            }
+            return Column(
+              children: <Widget>[
+                for (final T item in items)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(describe(item)),
+                    trailing: IconButton(
+                      tooltip: 'Supprimer',
+                      icon: const Icon(Icons.delete_outline),
+                      color: Theme.of(context).colorScheme.error,
+                      onPressed: () => _confirmDelete(context, item),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  /// Demande confirmation avant suppression.
+  ///
+  /// La suppression est définitive et le document disparaît aussitôt de
+  /// l'application mobile : une confirmation évite la perte accidentelle.
+  Future<void> _confirmDelete(BuildContext context, T item) async {
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Supprimer ?'),
+            content: Text('« ${describe(item)} » sera définitivement '
+                'retiré de l\'application mobile.'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Supprimer'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    try {
+      await onDelete(item);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Document supprimé.')));
+    } on FirebaseException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Suppression refusée : ${error.message}')),
+      );
+    }
+  }
+}
+
+/// Bandeau indiquant l'artiste auquel la publication sera rattachée.
+///
+/// Le `artistId` conditionne la visibilité côté mobile : afficher l'artiste
+/// évite qu'un événement ou un article soit publié « dans le vide », donc
+/// invisible pour tous.
+class _ArtistBanner extends StatelessWidget {
+  const _ArtistBanner({required this.artistId});
+
+  final String? artistId;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool pending = artistId == null;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: pending
+            ? theme.colorScheme.errorContainer
+            : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            pending ? Icons.error_outline : Icons.album_outlined,
+            color: pending
+                ? theme.colorScheme.onErrorContainer
+                : theme.colorScheme.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              pending
+                  ? 'Aucun artiste sélectionné'
+                  : 'Publié pour : ${adminArtistName(artistId!)}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: pending
+                    ? theme.colorScheme.onErrorContainer
+                    : theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _MerchForm extends StatefulWidget {
@@ -585,76 +921,216 @@ class _MerchForm extends StatefulWidget {
 }
 
 class _MerchFormState extends State<_MerchForm> {
+  final _form = GlobalKey<FormState>();
   final _name = TextEditingController();
+  final _description = TextEditingController();
   final _price = TextEditingController();
   final _image = TextEditingController();
   final _sizes = TextEditingController(text: 'S,M,L,XL');
   final _whatsapp = TextEditingController();
+
+  final ValueNotifier<AdminIdentity?> _identity = adminIdentityNotifier;
+
+  bool _saving = false;
+
+  /// Flux des articles publiés pour l'artiste courant.
+  ///
+  /// Voir [_EventFormState._eventsStream] pour le cas `null`.
+  Stream<List<MerchProduct>>? _merchStream() {
+    final String? artistId = _artistId;
+    if (artistId == null) {
+      return null;
+    }
+    return StoreRepository().watchMerch(artistId: artistId);
+  }
+
   @override
   void dispose() {
-    for (final c in [_name, _price, _image, _sizes, _whatsapp]) {
+    for (final c in [
+      _name,
+      _description,
+      _price,
+      _image,
+      _sizes,
+      _whatsapp,
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
 
+  /// Artiste de publication ; voir [_EventFormState._artistId].
+  String? get _artistId {
+    final AdminIdentity? identity = _identity.value;
+    if (identity == null || !identity.isResolved) {
+      return null;
+    }
+    if (!identity.isAgencyAdmin) {
+      return identity.assignedArtistId;
+    }
+    return shellArtistIdNotifier.value;
+  }
+
   Future<void> _save() async {
-    await FirebaseFirestore.instance.collection('merch').add(<String, Object?>{
-      'name': _name.text.trim(),
-      'price_fcfa': double.parse(_price.text),
-      'image_url': _image.text.trim(),
-      'sizes': _sizes.text
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList(),
-      'whatsapp_contact': _whatsapp.text.trim(),
-      'created_at': FieldValue.serverTimestamp(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Article enregistré.')));
-      for (final c in [_name, _price, _image, _sizes, _whatsapp]) {
+    if (!_form.currentState!.validate()) {
+      return;
+    }
+    final String? artistId = _artistId;
+    if (artistId == null) {
+      _toast('Choisissez un artiste avant de publier.');
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await StoreAdminService(FirebaseFirestore.instance).createMerch(
+        artistId: artistId,
+        name: _name.text,
+        description: _description.text,
+        priceFcfa: double.parse(_price.text.trim()),
+        imageUrl: _image.text,
+        whatsappContact: _whatsapp.text,
+        sizes: _sizes.text.split(','),
+      );
+      if (!mounted) {
+        return;
+      }
+      _toast('Article enregistré.');
+      for (final c in [
+        _name,
+        _description,
+        _price,
+        _image,
+        _whatsapp,
+      ]) {
         c.clear();
+      }
+    } on FormatException {
+      _toast('Prix invalide : un nombre était attendu.');
+    } on StateError catch (error) {
+      _toast(error.message);
+    } on FirebaseException catch (error) {
+      _toast('Publication refusée : ${error.message}');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
       }
     }
   }
 
+  void _toast(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.all(20),
-        children: <Widget>[
-          TextField(
-            controller: _name,
-            decoration: const InputDecoration(labelText: 'Nom'),
-          ),
-          TextField(
-            controller: _price,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Prix FCFA'),
-          ),
-          TextField(
-            controller: _image,
-            decoration: const InputDecoration(labelText: 'URL image'),
-          ),
-          TextField(
-            controller: _sizes,
-            decoration: const InputDecoration(
-              labelText: 'Tailles séparées par des virgules',
+  Widget build(BuildContext context) => Form(
+        key: _form,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: <Widget>[
+            ValueListenableBuilder<AdminIdentity?>(
+              valueListenable: _identity,
+              builder: (BuildContext context, AdminIdentity? identity, _) =>
+                  _ArtistBanner(artistId: _artistId),
             ),
-          ),
-          TextField(
-            controller: _whatsapp,
-            decoration: const InputDecoration(labelText: 'Contact WhatsApp'),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _save,
-            child: const Text('Enregistrer l’article'),
-          ),
-        ],
+            const SizedBox(height: 12),
+            _PublishedList<MerchProduct>(
+              title: 'Articles publiés',
+              emptyMessage:
+                  'Aucun article publié pour cet artiste. Le catalogue de la '
+                  'boutique reste vide côté mobile.',
+              stream: _merchStream(),
+              describe: (MerchProduct product) =>
+                  '${product.name} · ${product.formattedPrice}',
+              onDelete: (MerchProduct product) =>
+                  StoreAdminService(FirebaseFirestore.instance).deleteMerch(
+                    product.id,
+                  ),
+            ),
+            const Divider(height: 32),
+            const Text(
+              'Nouvel article',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: 'Nom'),
+              validator: _required,
+            ),
+            TextFormField(
+              controller: _description,
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                helperText: 'Facultatif',
+              ),
+            ),
+            TextFormField(
+              controller: _price,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Prix FCFA'),
+              validator: _positiveNumber,
+            ),
+            TextFormField(
+              controller: _image,
+              decoration: const InputDecoration(
+                labelText: 'URL image',
+                helperText: 'Facultatif — une icône est utilisée sinon',
+              ),
+              validator: _optionalUrl,
+            ),
+            TextFormField(
+              controller: _sizes,
+              decoration: const InputDecoration(
+                labelText: 'Tailles séparées par des virgules',
+              ),
+            ),
+            TextFormField(
+              controller: _whatsapp,
+              decoration: const InputDecoration(labelText: 'Contact WhatsApp'),
+              validator: _required,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Enregistrer l’article'),
+            ),
+          ],
+        ),
       );
+
+  static String? _required(String? value) =>
+      (value == null || value.trim().isEmpty) ? 'Champ obligatoire' : null;
+
+  static String? _positiveNumber(String? value) {
+    final double? parsed = double.tryParse((value ?? '').trim());
+    if (parsed == null || parsed <= 0) {
+      return 'Prix positif attendu';
+    }
+    return null;
+  }
+
+  /// URL facultative : vide si l'article n'a pas d'image.
+  static String? _optionalUrl(String? value) {
+    final String raw = (value ?? '').trim();
+    if (raw.isEmpty) {
+      return null;
+    }
+    return RegExp(r'^https?://').hasMatch(raw)
+        ? null
+        : 'URL invalide (http:// ou https://)';
+  }
 }
 
 class _TicketList extends StatelessWidget {

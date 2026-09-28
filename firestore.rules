@@ -32,11 +32,6 @@ service cloud.firestore {
 
       allow delete: if isValidAdmin();
 
-      /// Compte autorisé à publier.
-      function isValidAdmin() {
-        return request.auth != null;
-      }
-
       /// Le document respecte le schéma du catalogue.
       ///
       /// `audioUrl`/`audio_url` : URL absolue du MP3 (Supabase Storage).
@@ -57,6 +52,101 @@ service cloud.firestore {
             && audio is string
             && audio.matches('^https?://.*');
       }
+    }
+
+    // ── Billetterie & shows ──────────────────────────────────────────────
+    // Lecture publique : l'application mobile affiche les concerts à venir
+    // sans compte. Écriture réservée aux comptes authentifiés.
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isValidAdmin() && isValidEvent();
+      allow update: if isValidAdmin() && isValidEvent();
+      allow delete: if isValidAdmin();
+    }
+
+    // ── Boutique merchandise ─────────────────────────────────────────────
+    // Lecture publique : le catalogue produits est affiché sans compte.
+    match /merch/{productId} {
+      allow read: if true;
+      allow create: if isValidAdmin() && isValidMerch();
+      allow update: if isValidAdmin() && isValidMerch();
+      allow delete: if isValidAdmin();
+    }
+
+    // ── Billets ──────────────────────────────────────────────────────────
+    // Lecture et création : le public réserve et consulte ses billets.
+    // L'identifiant de l'utilisateur est posé par le client ; ces règles
+    // n'ont pas vocation à authentifier un scan d'entrée, qui relève d'un
+    // contrôle au guichet par l'équipe.
+    match /tickets/{ticketId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys()
+                       .hasAll(['event_id', 'ticket_type'])
+                    && request.resource.data.status == 'pending';
+      // Seul le statut évolue côté client ; un billet confirmé ne peut pas
+      // être remis en attente ni voir son QR code réécrit.
+      allow update: if isValidAdmin()
+                    || (request.resource.data.diff(resource.data)
+                          .affectedKeys().hasOnly(['status']));
+      allow delete: if isValidAdmin();
+    }
+
+    // ── Comptes du panneau ───────────────────────────────────────────────
+    // Lecture seule depuis le client : un compte ne peut pas s'octroyer le
+    // rôle `agency_admin`. L'attribution se fait depuis la console Firebase.
+    match /admin_users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    // Compte autorisé à publier.
+    function isValidAdmin() {
+      return request.auth != null;
+    }
+
+    /// Événement conforme au schéma attendu par l'application mobile.
+    ///
+    /// `date` est un `timestamp` — et non une chaîne libre — pour pouvoir trier
+    /// les concerts et n'afficher que les shows à venir. `date_label` conserve
+    /// la formulation lisible choisie par l'organisateur.
+    function isValidEvent() {
+      let data = request.resource.data;
+      return data.keys().hasAll(['title', 'artistId', 'date', 'location'])
+            && data.artistId is string
+            && data.artistId.size() > 0
+            && data.title is string
+            && data.title.size() > 0
+            && data.date is timestamp
+            && data.location is string
+            && data.price_std is number
+            && data.price_vip is number
+            && data.price_std > 0
+            && data.price_vip > 0
+            && data.mobile_money_number is string
+            && data.mobile_money_number.size() > 0
+            && data.total_seats is int
+            && data.total_seats > 0;
+    }
+
+    /// Article de merchandising conforme au schéma attendu par l'application.
+    ///
+    /// `image_url` est facultative : l'application affiche une icône de
+    /// repli. Lorsqu'elle est présente, elle doit être une URL absolue.
+    function isValidMerch() {
+      let data = request.resource.data;
+      let hasImage = 'image_url' in data && data.image_url is string
+                     && data.image_url.size() > 0;
+      return data.keys().hasAll(['name', 'artistId', 'price_fcfa'])
+            && data.artistId is string
+            && data.artistId.size() > 0
+            && data.name is string
+            && data.name.size() > 0
+            && data.price_fcfa is number
+            && data.price_fcfa > 0
+            && data.whatsapp_contact is string
+            && data.whatsapp_contact.size() > 0
+            && (hasImage == false
+                || data.image_url.matches('^https?://.*'));
     }
   }
 }

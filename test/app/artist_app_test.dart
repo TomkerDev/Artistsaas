@@ -6,20 +6,23 @@ import 'package:artistsaas/features/catalog/presentation/home_screen.dart';
 import 'package:artistsaas/features/catalog/presentation/widgets/track_list_tile.dart';
 import 'package:artistsaas/features/library/presentation/my_music_screen.dart';
 import 'package:artistsaas/features/player/presentation/player_screen.dart';
+import 'package:artistsaas/features/store/presentation/store_providers.dart';
 import 'package:artistsaas/features/store/presentation/store_show_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/fakes.dart';
+import '../helpers/fakes_store.dart';
 
 void main() {
   /// Monte l'application complète, comme le fait `main.dart`.
   ///
-  /// Le dépôt de catalogue est remplacé par un faux : le test ne dépend donc ni
-  /// du regroupement d'assets ni du contenu réel du catalogue. Les dépendances
-  /// audio et de téléchargement sont également remplacées afin que le test ne
-  /// touche ni au moteur natif ni au stockage.
+  /// Les dépôts de catalogue et de boutique sont remplacés par des faux : le
+  /// test ne dépend donc ni du regroupement d'assets, ni du contenu réel du
+  /// catalogue, ni de Firestore. Les dépendances audio et de téléchargement
+  /// sont également remplacées afin que le test ne touche ni au moteur natif
+  /// ni au stockage.
   Future<void> pumpApp(WidgetTester tester, {List<Track>? tracks}) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -38,6 +41,7 @@ void main() {
           playbackSourceResolverProvider.overrideWithValue(
             FakePlaybackSourceResolver(),
           ),
+          storeRepositoryProvider.overrideWithValue(FakeStoreRepository()),
         ],
         child: const ArtistApp(),
       ),
@@ -107,11 +111,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(selectedTab(tester), 3);
       expect(find.byType(StoreShowScreen), findsOneWidget);
-      expect(find.text('Acheter mon Billet'), findsNWidgets(2));
+      // Le contenu vient du dépôt de boutique : avec un dépôt vide, l'écran
+      // affiche son état vide plutôt que des données codées en dur.
+      expect(find.text('Aucun concert annoncé'), findsOneWidget);
 
       await tester.tap(find.text('Merchandise'));
       await tester.pumpAndSettle();
-      expect(find.text('T-shirt Novaa'), findsOneWidget);
+      expect(find.text('Boutique en préparation'), findsOneWidget);
 
       await tester.tap(find.byIcon(Icons.home_outlined));
       await tester.pumpAndSettle();

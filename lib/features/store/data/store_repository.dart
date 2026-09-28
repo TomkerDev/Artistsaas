@@ -25,19 +25,31 @@ class StoreRepository {
             .map(MerchProduct.fromFirestore)
             .toList(growable: false),
       );
-  Future<void> createTicket({
+  /// Réserve un billet et renvoie son identifiant.
+  ///
+  /// Le billet naît en `pending` : seul l'administrateur peut le confirmer
+  /// (cf. `firestore.rules`).
+  ///
+  /// L'identifiant suffit à l'appelant : il ne consomme que le `.id` du
+  /// document, et cela évite de faire transiter une référence Firestore dans
+  /// toute la couche interface.
+  Future<String> createTicket({
     required String userId,
     required String eventId,
     required String ticketType,
-    required String qrCodeData,
-  }) => _firestore.collection('tickets').add(<String, Object?>{
-    'user_id': userId,
-    'event_id': eventId,
-    'ticket_type': ticketType,
-    'qr_code_data': qrCodeData,
-    'status': 'pending',
-    'created_at': FieldValue.serverTimestamp(),
-  });
+  }) async {
+    final DocumentReference<Map<String, dynamic>> ticket = await _firestore
+        .collection('tickets')
+        .add(<String, Object?>{
+          'user_id': userId,
+          'event_id': eventId,
+          'ticket_type': ticketType,
+          'qr_code_data': _buildQrPayload(eventId, ticketType),
+          'status': 'pending',
+          'created_at': FieldValue.serverTimestamp(),
+        });
+    return ticket.id;
+  }
   Stream<List<StoreTicket>> watchTickets({String? eventId}) => _firestore
       .collection('tickets')
       .where('event_id', isEqualTo: eventId)
@@ -51,4 +63,21 @@ class StoreRepository {
       .collection('tickets')
       .doc(id)
       .update(<String, Object?>{'status': 'confirmed'});
+
+  /// Incrémente le compteur de places vendues d'un événement.
+  ///
+  /// Appelé après une réservation pour garder la barre de remplissage
+  /// cohérente. `increment` est atomique côté serveur : deux réservations
+  /// simultanées ne s'écrasent pas.
+  Future<void> incrementSeatsSold(String eventId) => _firestore
+      .collection('events')
+      .doc(eventId)
+      .update(<String, Object?>{'seats_sold': FieldValue.increment(1)});
+
+  /// Charge utile encodée dans le QR code du billet.
+  ///
+  /// Volontairement minimaliste : l'identifiant du billet n'étant pas connu
+  /// avant l'écriture, le contenu dérive de l'événement et du type de place.
+  String _buildQrPayload(String eventId, String ticketType) =>
+      'TETEROH:$eventId:$ticketType';
 }

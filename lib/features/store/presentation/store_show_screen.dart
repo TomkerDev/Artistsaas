@@ -1,12 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../core/constants/artist_config.dart';
+import '../data/store_repository.dart';
+import '../domain/store_models.dart';
+import 'store_providers.dart';
 
 class AboutArtistScreen extends StatelessWidget {
   const AboutArtistScreen({super.key});
@@ -208,58 +210,27 @@ class _SocialLink extends StatelessWidget {
 }
 
 /// Boutique et événements de l'artiste.
-class StoreShowScreen extends StatefulWidget {
+///
+/// L'écran observe deux flux Firestore via Riverpod (billetterie et
+/// merchandise) au lieu de listes codées en dur : le contenu publié depuis le
+/// panneau d'administration apparaît ici sans réédition de l'application.
+/// Chaque section affiche un état de chargement, une erreur exploitable et un
+/// état vide explicite — une panne réseau ne doit pas ressembler à un
+/// catalogue vide.
+class StoreShowScreen extends ConsumerStatefulWidget {
   const StoreShowScreen({super.key});
 
   @override
-  State<StoreShowScreen> createState() => _StoreShowScreenState();
+  ConsumerState<StoreShowScreen> createState() => _StoreShowScreenState();
 }
 
-class _StoreShowScreenState extends State<StoreShowScreen> {
+class _StoreShowScreenState extends ConsumerState<StoreShowScreen> {
   int _section = 0;
-  int? _selectedEvent;
-  int? _selectedProduct;
+  String? _selectedProductId;
   String? _selectedSize;
   String? _selectedColor;
   String? _ticketCode;
-
-  static const List<_ShowEvent> _events = <_ShowEvent>[
-    _ShowEvent(
-      'Nuit Novaa — Live',
-      'Samedi 18 juillet 2026',
-      'Palais des Sports, Brazzaville',
-      '5 000 FCFA',
-      '+242 06 000 00 00',
-    ),
-    _ShowEvent(
-      'Show de fin d’année',
-      'Vendredi 12 décembre 2026',
-      'Stade Municipal, Brazzaville',
-      '10 000 FCFA',
-      '+242 06 000 00 00',
-    ),
-  ];
-
-  static const List<_Product> _products = <_Product>[
-    _Product(
-      'T-shirt Novaa',
-      'Le modèle officiel de la tournée',
-      '8 000 FCFA',
-      Icons.checkroom,
-    ),
-    _Product(
-      'Casquette Novaa',
-      'Casquette brodée, édition limitée',
-      '5 000 FCFA',
-      Icons.sports_baseball,
-    ),
-    _Product(
-      'Goodies Show',
-      'Tourne-page et stickers exclusifs',
-      '3 000 FCFA',
-      Icons.card_giftcard,
-    ),
-  ];
+  String? _ticketEventTitle;
 
   @override
   Widget build(BuildContext context) {
@@ -306,73 +277,109 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
         ],
       );
 
-  Widget _ticketing() => StreamBuilder<QuerySnapshot>(
-        stream: Firebase.apps.isEmpty
-            ? const Stream<QuerySnapshot>.empty()
-            : FirebaseFirestore.instance
-                .collection('events')
-                .orderBy('date')
-                .snapshots(),
-        builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-          final List<_ShowEvent> remote =
-              (snapshot.data?.docs ?? const <QueryDocumentSnapshot<dynamic>>[])
-                  .map(
-            (QueryDocumentSnapshot<dynamic> doc) {
-              final Map<String, dynamic> data =
-                  doc.data() as Map<String, dynamic>;
-              return _ShowEvent(
-                data['title'] as String? ?? 'Événement',
-                data['date']?.toString() ?? '',
-                data['location'] as String? ?? '',
-                '${data['price_std'] ?? 0} FCFA',
-                data['mobile_money_number'] as String? ?? '',
-              );
-            },
-          ).toList();
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: <Widget>[
-              _sectionHeader(
-                'Événements à venir',
-                'Réservez votre place pour les prochains shows.',
-              ),
-              const SizedBox(height: 12),
-              for (final _ShowEvent event in <_ShowEvent>[
-                ...remote,
-                ..._events
-              ])
-                _eventCardFor(event),
-              if (_ticketCode != null) _ticketCard(),
-            ],
-          );
-        },
-      );
+  /// Billetterie : concerts à venir de l'artiste courant.
+  Widget _ticketing() {
+    final AsyncValue<List<ShowEvent>> events = ref.watch(
+      upcomingEventsProvider,
+    );
 
-  Widget _eventCardFor(_ShowEvent event) => Card(
+    return events.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, StackTrace stack) => _ErrorView(
+        message: 'Billetterie indisponible.',
+        detail: '$error',
+        onRetry: () => ref.invalidate(upcomingEventsProvider),
+      ),
+      data: (List<ShowEvent> list) {
+        if (list.isEmpty) {
+          return const _EmptyView(
+            icon: Icons.event_busy,
+            title: 'Aucun concert annoncé',
+            message: 'Les prochaines dates apparaîtront ici.',
+          );
+        }
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: <Widget>[
+            _sectionHeader(
+              'Événements à venir',
+              'Réservez votre place pour les prochains shows.',
+            ),
+            const SizedBox(height: 12),
+            for (final ShowEvent event in list) _eventCardFor(event),
+            if (_ticketCode != null) _ticketCard(),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Fiche d'un concert, avec la billetterie Mobile Money.
+  Widget _eventCardFor(ShowEvent event) => Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(event.title, style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                event.title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
-              _eventLine(Icons.calendar_today_outlined, event.date),
-              _eventLine(Icons.location_on_outlined, event.place),
-              _eventLine(Icons.payments_outlined, event.price),
+              _eventLine(Icons.calendar_today_outlined, event.displayDate),
+              if (event.location.isNotEmpty)
+                _eventLine(Icons.location_on_outlined, event.location),
+              _eventLine(
+                Icons.payments_outlined,
+                'Standard ${event.formatPrice(event.priceStd)}'
+                '${event.priceVip > 0 ? ' · VIP ${event.formatPrice(event.priceVip)}' : ''}',
+              ),
+              if (event.totalSeats > 0) ...<Widget>[
+                const SizedBox(height: 8),
+                _seatsGauge(event),
+              ],
               const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                  onPressed: () => _startPayment(event),
-                  icon: const Icon(Icons.phone_android),
-                  label: const Text('Acheter mon Billet'),
+              FilledButton.icon(
+                onPressed: event.isSoldOut ? null : () => _startPayment(event),
+                icon: const Icon(Icons.phone_android),
+                label: Text(
+                  event.isSoldOut ? 'Complet' : 'Acheter mon Billet',
                 ),
               ),
             ],
           ),
         ),
       );
+
+  /// Barre de remplissage des places, avec le nombre restant.
+  Widget _seatsGauge(ShowEvent event) {
+    final ThemeData theme = Theme.of(context);
+    final int remaining = event.remainingSeats;
+    final double ratio = event.totalSeats == 0
+        ? 0
+        : (event.seatsSold / event.totalSeats).clamp(0.0, 1.0);
+    final bool tight = remaining > 0 && remaining <= 10;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        LinearProgressIndicator(value: ratio),
+        const SizedBox(height: 4),
+        Text(
+          remaining == 0
+              ? 'Billetterie complète'
+              : '$remaining place${remaining > 1 ? 's' : ''} restante'
+                    '${remaining > 1 ? 's' : ''}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: tight
+                ? theme.colorScheme.error
+                : theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
 
   Widget _eventLine(IconData icon, String text) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
@@ -385,53 +392,93 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
         ),
       );
 
-  Future<void> _startPayment(_ShowEvent event) async {
+  /// Ouvre l'application Mobile Money, puis propose de valider le reçu.
+  ///
+  /// Le billet n'est créé qu'après confirmation du client : on n'émet pas de
+  /// réservation pour un paiement non effectué.
+  Future<void> _startPayment(ShowEvent event) async {
+    final String merchant = event.mobileMoneyNumber;
+    if (merchant.isEmpty) {
+      _toast('Aucun numéro Mobile Money n\'est configuré pour ce concert.');
+      return;
+    }
+
     final Uri uri = Uri(
       scheme: 'sms',
-      path: event.merchant,
+      path: merchant,
       query:
-          'body=${Uri.encodeComponent('Paiement billet ${event.title} — ${event.price}')}',
+          'body=${Uri.encodeComponent('Paiement billet ${event.title} — ${event.formatPrice(event.priceStd)}')}',
     );
     if (!await launchUrl(uri)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Impossible d’ouvrir Mobile Money. Vérifiez votre téléphone.',
-            ),
-          ),
-        );
-      }
+      _toast('Impossible d\'ouvrir Mobile Money. Vérifiez votre téléphone.');
       return;
     }
     if (!mounted) {
       return;
     }
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('Reçu Mobile Money'),
-        content: Text(
-          'Après avoir envoyé votre paiement au marchand ${event.merchant}, validez le reçu pour recevoir votre billet.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Plus tard'),
+
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: const Text('Reçu Mobile Money'),
+            content: Text(
+              'Après avoir envoyé votre paiement au marchand $merchant, '
+              'validez le reçu pour recevoir votre billet.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Plus tard'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Valider mon reçu'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _selectedEvent = _events.indexOf(event);
-                _ticketCode = 'NOVAA-${DateTime.now().millisecondsSinceEpoch}';
-              });
-            },
-            child: const Text('Valider mon reçu'),
-          ),
-        ],
-      ),
-    );
+        ) ??
+        false;
+
+    if (!confirmed || !mounted) {
+      return;
+    }
+    await _issueTicket(event);
+  }
+
+  /// Crée le billet en base et affiche son QR code.
+  ///
+  /// Le document naît en `pending` : l'administrateur le confirmera après
+  /// réception du paiement. L'incrément des places vendues est déclenché ici
+  /// pour que la jauge reste juste.
+  Future<void> _issueTicket(ShowEvent event) async {
+    try {
+      final StoreRepository repository = ref.read(storeRepositoryProvider);
+      final String ticketId = await repository.createTicket(
+        userId: currentStoreUserId,
+        eventId: event.id,
+        ticketType: 'standard',
+      );
+      await repository.incrementSeatsSold(event.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _ticketCode = ticketId;
+        _ticketEventTitle = event.title;
+      });
+    } on Object catch (error) {
+      _toast('Réservation impossible : $error');
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _ticketCard() => Card(
@@ -441,11 +488,19 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
           child: Column(
             children: <Widget>[
               const Text(
-                'Billet validé',
+                'Billet en attente de validation',
                 style: TextStyle(fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Présentez ce QR code au guichet après confirmation du '
+                'paiement par l\'organisation.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 8),
-              Text(_events[_selectedEvent ?? 0].title),
+              Text(_ticketEventTitle ?? ''),
               const SizedBox(height: 12),
               QrImageView(
                 data: _ticketCode!,
@@ -469,49 +524,113 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
         ),
       );
 
-  Widget _merchandise() => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        children: <Widget>[
-          _sectionHeader(
-            'Merchandise officielle',
-            'Choisis ton article et confirme tes préférences.',
-          ),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: .78,
-            ),
-            itemCount: _products.length,
-            itemBuilder: (BuildContext context, int index) =>
-                _productCard(index),
-          ),
-          if (_selectedProduct != null) _orderSummary(),
-        ],
-      );
+  /// Catalogue merchandise de l'artiste courant.
+  Widget _merchandise() {
+    final AsyncValue<List<MerchProduct>> products = ref.watch(merchProvider);
 
-  Widget _productCard(int index) {
-    final _Product product = _products[index];
+    return products.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (Object error, StackTrace stack) => _ErrorView(
+        message: 'Boutique indisponible.',
+        detail: '$error',
+        onRetry: () => ref.invalidate(merchProvider),
+      ),
+      data: (List<MerchProduct> list) {
+        if (list.isEmpty) {
+          return const _EmptyView(
+            icon: Icons.shopping_bag_outlined,
+            title: 'Boutique en préparation',
+            message: 'Les articles officiels arriveront prochainement.',
+          );
+        }
+        final MerchProduct? selected = _selectedProduct(list);
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: <Widget>[
+            _sectionHeader(
+              'Merchandise officielle',
+              'Choisis ton article et confirme tes préférences.',
+            ),
+            const SizedBox(height: 12),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: .78,
+              ),
+              itemCount: list.length,
+              itemBuilder: (BuildContext context, int index) =>
+                  _productCard(list[index]),
+            ),
+            if (selected != null) _orderSummary(selected),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Article sélectionné, ou `null` s'il n'est plus dans la liste.
+  ///
+  /// Le contenu est filtré côté serveur : un article supprimé du panneau doit
+  /// faire disparaître le récapitulatif, pas laisser une commande orpheline.
+  MerchProduct? _selectedProduct(List<MerchProduct> products) {
+    final String? id = _selectedProductId;
+    if (id == null) {
+      return null;
+    }
+    for (final MerchProduct product in products) {
+      if (product.id == id) {
+        return product;
+      }
+    }
+    return null;
+  }
+
+  /// Vignette d'un article : image distante si disponible, icône sinon.
+  Widget _productCard(MerchProduct product) {
+    final bool selected = _selectedProductId == product.id;
+
     return Card(
       clipBehavior: Clip.antiAlias,
+      shape: selected
+          ? RoundedRectangleBorder(
+              side: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            )
+          : null,
       child: InkWell(
         onTap: () => setState(() {
-          _selectedProduct = index;
-          _selectedSize ??= 'M';
+          _selectedProductId = product.id;
+          // Tailles et couleurs par défaut, si l'article en propose.
+          _selectedSize = product.sizes.isNotEmpty ? product.sizes.first : null;
           _selectedColor ??= 'Noir';
         }),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Expanded(
-              child: Container(
+              child: SizedBox(
                 width: double.infinity,
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Icon(product.icon, size: 72),
+                child: product.hasImage
+                    ? Image.network(
+                        product.imageUrl,
+                        fit: BoxFit.cover,
+                        // Repli sur l'icône si l'URL casse : la vignette ne
+                        // doit pas laisser un trou dans la grille.
+                        errorBuilder:
+                            (
+                              BuildContext context,
+                              Object error,
+                              StackTrace? stack,
+                            ) => _productFallback(),
+                      )
+                    : _productFallback(),
               ),
             ),
             Padding(
@@ -522,9 +641,11 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
                   Text(
                     product.name,
                     style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
-                  Text(product.price),
+                  Text(product.formattedPrice),
                 ],
               ),
             ),
@@ -534,93 +655,179 @@ class _StoreShowScreenState extends State<StoreShowScreen> {
     );
   }
 
-  Widget _orderSummary() {
-    final _Product product = _products[_selectedProduct!];
-    return Card(
+  /// Visuel de repli pour un article sans image.
+  Widget _productFallback() => Container(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: const Icon(Icons.checkroom, size: 72),
+      );
+
+  /// Récapitulatif et options de l'article sélectionné.
+  Widget _orderSummary(MerchProduct product) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Votre sélection',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text('${product.name} · ${product.formattedPrice}'),
+              // Les tailles ne sont proposées que si l'article en a : un
+              // article unique (goodies) n'a pas de taille à choisir.
+              if (product.sizes.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedSize,
+                  decoration: const InputDecoration(labelText: 'Taille'),
+                  items: <DropdownMenuItem<String>>[
+                    for (final String size in product.sizes)
+                      DropdownMenuItem<String>(
+                        value: size,
+                        child: Text(size),
+                      ),
+                  ],
+                  onChanged: (String? value) =>
+                      setState(() => _selectedSize = value),
+                ),
+              ],
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedColor,
+                decoration: const InputDecoration(labelText: 'Couleur'),
+                items: const <DropdownMenuItem<String>>[
+                  DropdownMenuItem(value: 'Noir', child: Text('Noir')),
+                  DropdownMenuItem(value: 'Blanc', child: Text('Blanc')),
+                  DropdownMenuItem(value: 'Rouge', child: Text('Rouge')),
+                ],
+                onChanged: (String? value) =>
+                    setState(() => _selectedColor = value),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => _orderViaWhatsApp(product),
+                icon: const Icon(Icons.chat),
+                label: const Text('Commander via WhatsApp'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  /// Ouvre WhatsApp avec le récapitulatif de commande pré-rempli.
+  Future<void> _orderViaWhatsApp(MerchProduct product) async {
+    // Le contact vient de la fiche article ; sans lui la commande ne peut pas
+    // aboutir : mieux vaut le dire que d'ouvrir une conversation vide.
+    final String contact = product.whatsappContact;
+    if (contact.isEmpty) {
+      _toast('Aucun contact WhatsApp n\'est configuré pour cet article.');
+      return;
+    }
+
+    final String message = Uri.encodeComponent(
+      'Bonjour, je souhaite commander : ${product.name}, '
+      'prix ${product.formattedPrice}'
+      '${_selectedSize != null ? ', taille $_selectedSize' : ''}'
+      '${_selectedColor != null ? ', couleur $_selectedColor' : ''}.',
+    );
+    final Uri uri = Uri.parse('https://wa.me/$contact?text=$message');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      _toast('WhatsApp n\'est pas disponible sur cet appareil.');
+    }
+  }
+}
+
+/// Écran vide explicite : distingue « rien à afficher » d'une panne.
+class _EmptyView extends StatelessWidget {
+  const _EmptyView({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Center(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            Icon(icon, size: 56, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
             Text(
-              'Votre sélection',
-              style: Theme.of(context).textTheme.titleMedium,
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text('${product.name} · ${product.price}'),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedSize,
-              decoration: const InputDecoration(labelText: 'Taille'),
-              items: const <DropdownMenuItem<String>>[
-                DropdownMenuItem(value: 'S', child: Text('S')),
-                DropdownMenuItem(value: 'M', child: Text('M')),
-                DropdownMenuItem(value: 'L', child: Text('L')),
-                DropdownMenuItem(value: 'XL', child: Text('XL')),
-              ],
-              onChanged: (String? value) =>
-                  setState(() => _selectedSize = value),
+            Text(message, textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Erreur de chargement, avec une action de relance.
+///
+/// Sans elle, un échec réseau est indiscernable d'un catalogue vide — et
+/// l'utilisateur n'a aucun moyen de savoir qu'il peut réessayer.
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({
+    required this.message,
+    required this.detail,
+    required this.onRetry,
+  });
+
+  final String message;
+  final String detail;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              Icons.cloud_off,
+              size: 56,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedColor,
-              decoration: const InputDecoration(labelText: 'Couleur'),
-              items: const <DropdownMenuItem<String>>[
-                DropdownMenuItem(value: 'Noir', child: Text('Noir')),
-                DropdownMenuItem(value: 'Blanc', child: Text('Blanc')),
-                DropdownMenuItem(value: 'Rouge', child: Text('Rouge')),
-              ],
-              onChanged: (String? value) =>
-                  setState(() => _selectedColor = value),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Text(
+              detail,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
             FilledButton.icon(
-              onPressed: _orderViaWhatsApp,
-              icon: const Icon(Icons.chat),
-              label: const Text('Commander via WhatsApp'),
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Réessayer'),
             ),
           ],
         ),
       ),
     );
   }
-
-  Future<void> _orderViaWhatsApp() async {
-    final _Product product = _products[_selectedProduct!];
-    final String message = Uri.encodeComponent(
-      'Bonjour, je souhaite commander : ${product.name}, taille $_selectedSize, couleur $_selectedColor, prix ${product.price}.',
-    );
-    final Uri uri = Uri.parse('https://wa.me/242000000000?text=$message');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-        mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('WhatsApp n’est pas disponible sur cet appareil.'),
-        ),
-      );
-    }
-  }
-}
-
-class _ShowEvent {
-  const _ShowEvent(
-    this.title,
-    this.date,
-    this.place,
-    this.price,
-    this.merchant,
-  );
-  final String title;
-  final String date;
-  final String place;
-  final String price;
-  final String merchant;
-}
-
-class _Product {
-  const _Product(this.name, this.description, this.price, this.icon);
-  final String name;
-  final String description;
-  final String price;
-  final IconData icon;
 }

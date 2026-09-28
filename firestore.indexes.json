@@ -14,6 +14,50 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionId": "events",
+      "queryScope": "COLLECTION",
+      "name": "events_artistId_asc_date_asc",
+      "comment": "Billetterie mobile : concerts d'un artiste, du plus ancien au plus récent.",
+      "fields": [
+        {
+          "fieldPath": "artistId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionId": "merch",
+      "queryScope": "COLLECTION",
+      "name": "merch_artistId_asc_name_asc",
+      "comment": "Boutique mobile : catalogue produits d'un artiste, trié par nom.",
+      "fields": [
+        {
+          "fieldPath": "artistId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionId": "tickets",
+      "queryScope": "COLLECTION",
+      "name": "tickets_event_id_asc",
+      "comment": "Back-office billetterie : billets d'un événement.",
+      "fields": [
+        {
+          "fieldPath": "event_id",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

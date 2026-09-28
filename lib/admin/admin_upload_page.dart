@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../services/supabase_storage_service.dart';
+import 'admin_identity.dart';
 import 'admin_routes.dart';
 
 /// Panneau de publication multi-artistes (Flutter Web).
@@ -133,26 +134,13 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
 
     _userId = user.uid;
 
-    try {
-      final DocumentSnapshot doc = await FirebaseFirestore.instance
-          .collection('admin_users')
-          .doc(user.uid)
-          .get();
-
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data() as Map<String, dynamic>;
-        _userRole = data['role'] as String? ?? 'artist';
-        _assignedArtistId = data['assignedArtistId'] as String? ?? '';
-      } else {
-        // Aucun document admin : rôle par défaut limité à un artiste.
-        _userRole = 'artist';
-        _assignedArtistId = '';
-      }
-    } on FirebaseException {
-      // En cas d'erreur, démarre en mode artiste restreint.
-      _userRole = 'artist';
-      _assignedArtistId = '';
-    }
+    // Rôle et artiste assigné sont lus une seule fois et partagés avec les
+    // autres écrans du panneau (billetterie, merchandise) via
+    // `adminIdentityNotifier` : chaque écran ne relit pas `admin_users`.
+    final AdminIdentity identity = await AdminIdentity.load();
+    adminIdentityNotifier.value = identity;
+    _userRole = identity.role;
+    _assignedArtistId = identity.assignedArtistId;
 
     // Artistes non-admins (sans accès 'all') : verrouiller le sélecteur
     // sur leur artiste assigné (ex: 'jethsonat').
@@ -163,6 +151,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
         !_isAgencyAdmin) {
       _selectedArtistId = assigned;
     }
+    // Publié pour que billetterie et merchandise publient pour le même artiste.
+    shellArtistIdNotifier.value = _selectedArtistId;
 
     if (mounted) {
       _loadingRole = false;
@@ -186,6 +176,8 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
   void _onArtistChanged(String newArtistId) {
     if (newArtistId == _selectedArtistId || !_isAgencyAdmin) return;
     setState(() => _selectedArtistId = newArtistId);
+    // Billetterie et merchandise suivent le même artiste.
+    shellArtistIdNotifier.value = newArtistId;
   }
 
   Future<void> _pickAudio() async {
