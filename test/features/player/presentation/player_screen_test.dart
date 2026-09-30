@@ -1,4 +1,5 @@
 import 'package:artistsaas/app/di/app_providers.dart';
+import 'package:artistsaas/app/shell/home_shell.dart';
 import 'package:artistsaas/core/constants/app_strings.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/player/presentation/playback_controller.dart';
@@ -106,6 +107,64 @@ void main() {
       expect(find.text('Ajouté aux favoris'), findsOneWidget);
 
       await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'le bouton X referme l\'écran du lecteur vers l\'onglet d\'origine',
+    (WidgetTester tester) async {
+      await pumpPlayer(tester);
+      // L'écran est un onglet de la coquille : simule une ouverture venue
+      // d'un autre onglet (ici Boutique, index 3).
+      selectedTabNotifier.value = 1;
+      lastNonPlayerTab = 3;
+      addTearDown(() {
+        selectedTabNotifier.value = 0;
+        lastNonPlayerTab = 0;
+      });
+
+      await tester.tap(find.byTooltip(AppStrings.playerCloseAction));
+      await tester.pumpAndSettle();
+
+      // La fermeture retourne à l'onglet d'origine (la lecture, elle, n'est
+      // pas touchée : le mini-lecteur prend le relais sur les autres onglets).
+      expect(selectedTabNotifier.value, 3);
+    },
+  );
+
+  testWidgets(
+    'l\'icône aléatoire reste active après les émissions du moteur',
+    (WidgetTester tester) async {
+      final ProviderContainer container = await pumpPlayer(tester);
+
+      await container
+          .read(playbackControllerProvider.notifier)
+          .playCatalog(<Track>[buildTrack(id: 'a')]);
+      await tester.pumpAndSettle();
+
+      // Les contrôles sont sous la ligne de flottaison du `ScrollView` de
+      // l'écran : on les fait défiler avant de les actionner.
+      await tester.ensureVisible(find.byIcon(Icons.shuffle));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.shuffle));
+      await tester.pumpAndSettle();
+
+      // Un tick de position du moteur remplace l'état du contrôleur : le
+      // mode aléatoire doit y survivre (sinon l'icône clignote puis revient
+      // en blanc, comme si le bouton ne réagissait pas).
+      final FakeAudioPlayerService service = container
+          .read(audioPlayerServiceProvider) as FakeAudioPlayerService;
+      service.emit(
+        service.state.copyWith(position: const Duration(seconds: 2)),
+      );
+      await tester.pumpAndSettle();
+
+      final Icon icon = tester.widget<Icon>(find.byIcon(Icons.shuffle));
+      expect(icon.color, isNot(Colors.white));
+      expect(
+        container.read(playbackControllerProvider).shuffleEnabled,
+        isTrue,
+      );
     },
   );
 }

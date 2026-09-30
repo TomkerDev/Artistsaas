@@ -1,6 +1,7 @@
 import 'package:artistsaas/app/di/app_providers.dart';
 import 'package:artistsaas/core/errors/app_exception.dart';
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
+import 'package:artistsaas/features/player/domain/entities/loop_mode.dart';
 import 'package:artistsaas/features/player/domain/entities/playback_state.dart';
 import 'package:artistsaas/features/player/presentation/playback_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -133,6 +134,35 @@ void main() {
 
       expect(service.setQueueCount, 2);
       expect(service.lastInitialIndex, 1);
+    });
+
+    test('shuffle et boucle survivent aux émissions suivantes du moteur',
+        () async {
+      final PlaybackController controller = container.read(
+        playbackControllerProvider.notifier,
+      );
+
+      await controller.playCatalog(
+        <Track>[buildTrack(id: 'a'), buildTrack(id: 'b')],
+      );
+      await pumpEventQueue();
+
+      await controller.setShuffleModeEnabled(true);
+      await controller.setLoopMode(LoopMode.all);
+      await pumpEventQueue();
+
+      // Chaque émission du service remplace l'état du contrôleur : les modes
+      // de lecture doivent y être portés par le service lui-même, sans quoi
+      // les icônes de l'écran Lecteur repasseraient en « off » au tick
+      // suivant (bug des contrôles « qui ne réagissent pas »).
+      service.emit(
+        service.state.copyWith(position: const Duration(seconds: 3)),
+      );
+      await pumpEventQueue();
+
+      final PlaybackState state = container.read(playbackControllerProvider);
+      expect(state.shuffleEnabled, isTrue);
+      expect(state.loopMode, LoopMode.all);
     });
   });
 }

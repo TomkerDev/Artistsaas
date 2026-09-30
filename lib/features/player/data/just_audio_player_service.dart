@@ -39,6 +39,17 @@ class JustAudioPlayerService implements AudioPlayerService {
 
   bool _disposed = false;
 
+  /// `true` dès qu'une file a été chargée avec succès dans le moteur.
+  ///
+  /// Sert à distinguer l'état `idle` initial (aucune file : rien à faire) de
+  /// l'état `idle` publié après un arrêt demandé hors de l'application (bouton
+  /// « stop » de la notification système).
+  bool _hasActiveQueue = false;
+
+  /// `true` pendant le chargement d'une file : le moteur peut transiter par
+  /// `idle` entre deux files, ce qui n'est pas un arrêt.
+  bool _settingQueue = false;
+
   JustAudioPlayerService() {
     _subscriptions.addAll(<StreamSubscription<Object?>>[
       _player.playerStateStream.listen((ja.PlayerState playerState) {
@@ -63,6 +74,23 @@ class JustAudioPlayerService implements AudioPlayerService {
         (int? index) => index == null
             ? null
             : _publish(_state.copyWith(currentIndex: index)),
+      ),
+      // Un retour à l'état `idle` APRÈS chargement d'une file signifie un
+      // arrêt demandé hors de l'application : bouton « stop » de la
+      // notification système, casque ou écran de verrouillage. La file
+      // publiée est alors vidée pour que le mini-lecteur et l'écran du
+      // lecteur se ferment, comme pour un arrêt local. L'`idle` initial et
+      // les transitoires de chargement sont ignorés.
+      _player.processingStateStream.listen(
+        (ja.ProcessingState processingState) {
+          if (processingState != ja.ProcessingState.idle ||
+              !_hasActiveQueue ||
+              _settingQueue) {
+            return;
+          }
+          _hasActiveQueue = false;
+          _publish(const PlaybackState());
+        },
       ),
     ]);
   }
@@ -102,13 +130,25 @@ class JustAudioPlayerService implements AudioPlayerService {
           errorMessage: null,
         ),
       );
+      _settingQueue = true;
       final Duration? duration = await _player.setAudioSources(
         sources,
         initialIndex: initialIndex,
       );
-      if (duration != null) {
-        _publish(_state.copyWith(duration: duration));
-      }
+      // La file est chargée : à partir de cet instant, un état `idle` du
+      // moteur signifiera un arrêt (notification, casque), pas une
+      // initialisation.
+      _hasActiveQueue = true;
+      // Boucle et aléa sont relus au moteur : `just_audio` les conserve d'une
+      // file à l'autre, et l'état publié doit suivre ce que le moteur
+      // applique réellement.
+      _publish(
+        _state.copyWith(
+          duration: duration,
+          loopMode: _domainLoopMode(_player.loopMode),
+          shuffleEnabled: _player.shuffleModeEnabled,
+        ),
+      );
     } on Object catch (error) {
       _publish(
         _state.copyWith(
@@ -119,16 +159,26 @@ class JustAudioPlayerService implements AudioPlayerService {
         'Impossible de préparer la lecture de la file.',
         cause: error,
       );
+    } finally {
+      _settingQueue = false;
     }
   }
 
   @override
   Future<void> play() async {
-    try {
-      await _player.play();
-    } on Object catch (error) {
-      _publish(_state.copyWith(errorMessage: 'La lecture a échoué : $error'));
-    }
+    // `just_audio` : le futur de `play()` ne se termine qu'à la pause, à
+    // l'arrêt ou à la fin du morceau — et jamais si la session audio refuse
+    // l'activation. L'attendre laisserait chaque appel de lecture suspendu
+    // indéfiniment (`playCatalog`, lecture/pause) : la lecture est donc
+    // lancée sans attendre sa fin, et un échec éventuel est publié dans
+    // l'état, conformément au contrat du domaine.
+    unawaited(
+      _player.play().catchError((Object error) {
+        _publish(
+          _state.copyWith(errorMessage: 'La lecture a échoué : $error'),
+        );
+      }),
+    );
   }
 
   @override
@@ -181,6 +231,9 @@ class JustAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> stop() async {
+    // L'arrêt est explicite : l'événement `idle` du moteur qui va suivre n'a
+    // plus à être traité comme un arrêt distant.
+    _hasActiveQueue = false;
     try {
       await _player.stop();
       // `stop()` interrompt le média et vide le tampon de lecture. La position
@@ -206,6 +259,10 @@ class JustAudioPlayerService implements AudioPlayerService {
         LoopMode.all => ja.LoopMode.all,
         LoopMode.one => ja.LoopMode.one,
       });
+      // Publié à chaque émission suivante du moteur : le contrôleur remplace
+      // intégralement son état à la réception, sans quoi l'icône de boucle
+      // repasserait en « off » au prochain tick de position.
+      _publish(_state.copyWith(loopMode: mode));
     } on Object catch (error) {
       _publish(
         _state.copyWith(errorMessage: 'Mode de boucle impossible : $error'),
@@ -217,6 +274,10 @@ class JustAudioPlayerService implements AudioPlayerService {
   Future<void> setShuffleModeEnabled(bool enabled) async {
     try {
       await _player.setShuffleModeEnabled(enabled);
+      // Même raison que [setLoopMode] : le mode aléatoire doit figurer dans
+      // TOUTES les émissions du moteur, sinon l'icône de l'écran Lecteur
+      // clignote puis revient en « off » au tick suivant.
+      _publish(_state.copyWith(shuffleEnabled: enabled));
     } on Object catch (error) {
       _publish(
         _state.copyWith(errorMessage: 'Mode aléatoire impossible : $error'),
@@ -236,6 +297,13 @@ class JustAudioPlayerService implements AudioPlayerService {
     await _states.close();
     await _player.dispose();
   }
+
+  /// Traduit un mode de boucle du moteur vers le domaine.
+  LoopMode _domainLoopMode(ja.LoopMode mode) => switch (mode) {
+        ja.LoopMode.off => LoopMode.off,
+        ja.LoopMode.all => LoopMode.all,
+        ja.LoopMode.one => LoopMode.one,
+      };
 
   /// Traduit une source de domaine en source `just_audio` étiquetée.
   ///

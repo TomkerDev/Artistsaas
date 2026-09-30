@@ -6,8 +6,10 @@ import '../domain/repositories/favorite_repository.dart';
 
 /// Persistance des favoris dans une base `sqflite`.
 ///
-/// La table `favorites` est créée si elle n'existe pas. L'ouverture de la base
-/// est paresseuse pour permettre l'injection d'une base factice en test.
+/// Stockage **strictement local** : aucune lecture ni écriture réseau (ni
+/// Firestore, ni autre service) n'accompagne les favoris. La table
+/// `favorites` est créée si elle n'existe pas. L'ouverture de la base est
+/// paresseuse pour permettre l'injection d'une base factice en test.
 class LocalFavoriteRepository implements FavoriteRepository {
   LocalFavoriteRepository({Future<Database> Function()? openDatabase})
       : _openDatabase = openDatabase ?? _openDefaultDatabase;

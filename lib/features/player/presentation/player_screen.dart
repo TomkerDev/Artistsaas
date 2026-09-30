@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/config/app_config.dart';
+import '../../../app/shell/home_shell.dart'
+    show lastNonPlayerTab, selectedTabNotifier;
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/duration_formatter.dart';
 import '../../favorites/presentation/widgets/favorite_button.dart';
@@ -24,7 +26,20 @@ class PlayerScreen extends ConsumerWidget {
     final PlaybackState state = ref.watch(playbackControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.playerTitle)),
+      appBar: AppBar(
+        title: const Text(AppStrings.playerTitle),
+        actions: <Widget>[
+          // Ferme l'écran du lecteur : retour à l'onglet d'origine, la
+          // lecture continuant en arrière-plan (le mini-lecteur reste
+          // visible). L'écran est un onglet de la coquille, pas une route :
+          // `Navigator.pop` ne s'appliquerait pas ici.
+          IconButton(
+            icon: const Icon(Icons.close),
+            tooltip: AppStrings.playerCloseAction,
+            onPressed: () => selectedTabNotifier.value = lastNonPlayerTab,
+          ),
+        ],
+      ),
       body: state.hasCurrent
           ? _NowPlaying(state: state)
           : _PlayerEmptyView(state: state),

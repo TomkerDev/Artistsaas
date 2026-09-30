@@ -37,6 +37,9 @@ abstract final class AppStrings {
   static const String playerQueueTitle = 'File de lecture';
   static const String playerErrorTitle = 'Lecture impossible';
 
+  /// Bouton « fermer » de l'écran Lecteur (retour à l'onglet d'origine).
+  static const String playerCloseAction = 'Fermer le lecteur';
+
   // Actions de lecture.
   static const String playAction = 'Lire';
   static const String pauseAction = 'Pause';

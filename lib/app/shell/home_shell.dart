@@ -12,6 +12,14 @@ import 'mini_player.dart';
 /// Onglet sélectionné, partagé entre la coquille et le mini-lecteur.
 final ValueNotifier<int> selectedTabNotifier = ValueNotifier<int>(0);
 
+/// Dernier onglet affiché avant l'onglet Lecteur.
+///
+/// Le bouton « fermer » de l'écran Lecteur y retourne (via
+/// [selectedTabNotifier]) plutôt que vers l'accueil : l'utilisateur retrouve
+/// l'écran d'où il est venu. Mis à jour par la coquille à chaque changement
+/// d'onglet.
+int lastNonPlayerTab = 0;
+
 /// Coquille principale de l'application : barre d'onglets et contenu des trois
 /// écrans du MVP.
 ///
@@ -49,12 +57,18 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  /// Demande de navigation venant du mini-lecteur.
+  /// Demande de navigation venant du mini-lecteur ou de l'écran Lecteur.
   void _onTabRequested() {
     final int requested = selectedTabNotifier.value;
-    if (requested != _selectedIndex) {
-      setState(() => _selectedIndex = requested);
+    if (requested == _selectedIndex) {
+      return;
     }
+    // Mémorise l'onglet d'origine (l'onglet 1 est le lecteur lui-même) pour
+    // que la fermeture du lecteur y retourne.
+    if (requested != 1) {
+      lastNonPlayerTab = requested;
+    }
+    setState(() => _selectedIndex = requested);
   }
 
   void _onDestinationSelected(int index) {

@@ -63,6 +63,12 @@ Future<void> main() async {
           'Lecture de la musique de ${AppConfig.artist.stageName}',
       // La notification doit rester dismissible : sa suppression appelle le
       // handler audio, qui appelle stop() et libère le lecteur just_audio.
+      // Le bouton stop (X) de la notification est fourni automatiquement par
+      // `just_audio_background` (MediaControl.stop, visible dans la
+      // notification développée) : son action remet le moteur à l'état
+      // `idle`, état que `JustAudioPlayerService` traduit en file vidée — le
+      // mini-lecteur et l'écran du lecteur se ferment alors comme pour un
+      // arrêt local.
       androidNotificationOngoing: false,
       // Un arrêt ou une pause quitte immédiatement le service foreground afin
       // que la notification de l'écran de verrouillage disparaisse sans attendre.
