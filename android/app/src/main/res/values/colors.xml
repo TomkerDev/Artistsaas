@@ -2,5 +2,5 @@
 <resources>
     <!-- Fond nuit de la marque, utilisé par le splash natif. -->
     <color name="brand_night">#1A1024</color>
-	<color name="ic_launcher_background">#6C3BF4</color>
+	<color name="ic_launcher_background">#000000</color>
 </resources>

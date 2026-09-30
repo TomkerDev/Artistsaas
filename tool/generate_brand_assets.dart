@@ -43,28 +43,22 @@ void main() {
     stdout.writeln('assets/covers/$name');
   }
 
-  // Icônes de lancement par artiste, consommées par flutter_launcher_icons.yaml
-  // (bloc `flavors`). Le motif reste la « nova », la teinte varie par artiste.
+  // Icônes génériques des artistes de démonstration (`artist_1`..`artist_10`).
+  // `flutter_launcher_icons` 0.14.x ne gérant pas de bloc `flavors:`, elles ne
+  // pilotent pas les icônes natives : ce sont des visuels de bibliothèque, au
+  // même titre que les pochettes `cover-0X.png`. Le motif reste la « nova », la
+  // teinte varie par artiste.
   for (int index = 0; index < _artistCount; index++) {
     final String path = 'assets/icons/artist_${index + 1}_icon.png';
     _writeImage(path, 1024, _artistIconPaint(index));
     stdout.writeln(path);
   }
 
-  // Pochette et icône officielles de Jethsonat (label Tete Roh Studio).
-  // Elles ne sont pas « générées » au sens graphique : ce sont des
-  // emplacements de marque que l'artiste remplace par son visuel officiel.
-  // Le visuel produit ici garantit une application lisible tant que la
-  // pochette définitive n'est pas déposée dans `assets/covers/`.
-  _writeImage(
-    'assets/covers/jethsonat_cover.png',
-    1024,
-    _jethsonatCoverPaint(),
-  );
-  stdout.writeln('assets/covers/jethsonat_cover.png');
-
-  _writeImage('assets/icons/jethsonat_icon.png', 1024, _jethsonatIconPaint());
-  stdout.writeln('assets/icons/jethsonat_icon.png');
+  // Les icônes de lancement et pochettes officielles des artistes signés
+  // (Jethsonat) ne sont **pas** produites ici : elles sont dérivées de la photo
+  // officielle de l'artiste par `tool/generate_jethsonat_icon.ps1`, puis
+  // consommées par `flutter_launcher_icons.yaml`. Les régénérer avec ce script
+  // écraserait le visuel de l'artiste par un motif générique.
 }
 
 /// Nombre d'artistes exposés (aligné sur les flavors `artist1`..`artistN`).
@@ -146,62 +140,6 @@ int Function(double, double) _coverPaint(int index) {
         }
         return base;
     }
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Jethsonat — univers « Sec Sec » (millet / feu)
-// ---------------------------------------------------------------------------
-
-// Palette chaude de l'univers Jethsonat, volontairement distincte du violet
-// de la marque générique : ocre de mil, terre de feu et nuit brune.
-const int _millet = 0xFFE8A33D;
-const int _ember = 0xFFC2410C;
-const int _clay = 0xFF3B1F0E;
-
-/// Pochette de header de Jethsonat : soleil de mil sur fond de terre, traversé
-/// de bandes verticales évoquant les epis de mil. À remplacer par la pochette
-/// officielle de l'artiste dès qu'elle est disponible.
-int Function(double, double) _jethsonatCoverPaint() {
-  return (double x, double y) {
-    final double dx = x - 0.5;
-    final double dy = y - 0.5;
-    final double r = sqrt(dx * dx + dy * dy);
-
-    // Disque solaire centré légèrement au-dessus du milieu.
-    final double sunR = sqrt(dx * dx + (dy + 0.08) * (dy + 0.08));
-    if (sunR < 0.30) {
-      // Bandes verticales (« sec sec ») gravées dans le disque.
-      final double band = (x * 9) % 1;
-      if (band < 0.22) {
-        return _blend(_ember, _clay, 0.5);
-      }
-      return _blend(_millet, _ember, 1 - sunR / 0.30);
-    }
-
-    // Fond : dégradé terre → nuit, plus sombre en bas.
-    final int base = _blend(_clay, _ember, y * 0.7);
-    final double glow = ((r - 0.30) * 6) % 1;
-    if (glow < 0.16) {
-      return _blend(base, _millet, 0.35);
-    }
-    return base;
-  };
-}
-
-/// Icône de lancement de Jethsonat : même palette, soleil épuré sur fond nuit.
-int Function(double, double) _jethsonatIconPaint() {
-  return (double x, double y) {
-    final double dx = x - 0.5;
-    final double dy = y - 0.5;
-    final double distance = sqrt(dx * dx + dy * dy) * 2;
-    if (distance > 0.46) {
-      return _clay;
-    }
-    if (distance > 0.28) {
-      return _blend(_ember, _clay, (distance - 0.28) / 0.18);
-    }
-    return _blend(_millet, _ember, distance / 0.28);
   };
 }
 

@@ -77,10 +77,13 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
-# IcÃ´nes de lancement par artiste : la configuration est centralisÃ©e dans
-# `flutter_launcher_icons.yaml` (bloc `flavors`), puis gÃ©nÃ©rÃ©e via :
-#   dart run tool/generate_brand_assets.dart
+# Icônes de lancement Android : la configuration est centralisée dans
+# `flutter_launcher_icons.yaml`, puis générée via :
+#   powershell -ExecutionPolicy Bypass -File tool/generate_jethsonat_icon.ps1
 #   dart run flutter_launcher_icons
+# `dart run tool/generate_brand_assets.dart` régénère la marque générique
+# (logo, pochettes, `assets/icons/artist_X_icon.png`) mais **pas** la photo
+# officielle de Jethsonat, produite par le script PowerShell ci-dessus.
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
