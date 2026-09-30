@@ -6,6 +6,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'app/artist_app.dart';
+import 'app/config/app_config.dart';
 import 'features/ads/services/ads_service.dart';
 import 'firebase_options.dart';
 
@@ -29,8 +30,11 @@ Future<void> main() async {
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.tomker.artistsaas.channel.audio',
     androidNotificationChannelName: 'Lecture musicale Novaa',
+    // Le nom de l'artiste vient du registre (`--dart-define=ARTIST_ID=…`) : une
+    // chaîne codée en dur afficherait l'artiste d'un autre build dans les
+    // réglages de notification Android.
     androidNotificationChannelDescription:
-        'Lecture de la musique de Dilson Le Mustang',
+        'Lecture de la musique de ${AppConfig.artist.stageName}',
     // La notification doit rester dismissible : sa suppression appelle le
     // handler audio, qui appelle stop() et libère le lecteur just_audio.
     androidNotificationOngoing: false,
