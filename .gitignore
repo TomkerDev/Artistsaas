@@ -38,6 +38,14 @@ migrate_working_dir/
 .env
 .env.local
 
+# Clé de signature de release Android.
+# Le keystore et ses mots de passe ne quittent jamais le poste : les publier
+# reviendrait à céder l'application, et les perdre interdit toute mise à jour
+# publiée avec la même identité (cf. docs/ARCHITECTURE.md).
+/android/key.properties
+*.jks
+*.keystore
+
 # APK et AAB produits par `scripts/build_apk.ps1`.
 # Le dossier `build/` est déjà ignoré et effacé par `flutter clean` ; cette
 # entrée protège les copies déposées dans `releases/`, qui pèsent ~70 Mo.
