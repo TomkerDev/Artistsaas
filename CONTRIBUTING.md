@@ -168,6 +168,15 @@ chore: mettre a jour les dependencies
 ### Panneau admin (web)
 
 ```powershell
+# Build du panneau depuis .env, avec contrôle de build/web/main.dart.js.
+powershell -ExecutionPolicy Bypass -File scripts/build_web.ps1
+
+firebase deploy --only hosting --project novaa-music-tchaddd
+```
+
+Equivalent manuel :
+
+```powershell
 flutter build web -t lib/main_admin.dart --release --no-tree-shake-icons `
   --dart-define=FIREBASE_API_KEY=... `
   --dart-define=FIREBASE_APP_ID=... `

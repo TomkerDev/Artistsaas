@@ -72,8 +72,14 @@ create("mon_artiste") {
 - **Pochette** : déposer l'image dans `assets/covers/`. Le dossier est déclaré
   dans `pubspec.yaml` : si le nom correspond à `ArtistProfile.coverAsset`, aucun
   autre changement n'est requis.
-- **Icône** : déposer `assets/icons/mon_artiste_icon.png`, ajouter une entrée
-  dans `flutter_launcher_icons.yaml`, puis `dart run flutter_launcher_icons`.
+- **Icône** : déposer `assets/icons/mon_artiste_icon.png`, faire pointer
+  `image_path` et `adaptive_icon_foreground` dessus dans
+  `flutter_launcher_icons.yaml`, puis lancer `dart run flutter_launcher_icons`.
+  Les icônes sont écrites dans `android/app/src/main/res/` et donc **partagées
+  par tous les flavors** : `flutter_launcher_icons` 0.14.x ne gère pas de bloc
+  `flavors:` (voir `docs/ARCHITECTURE.md`). Pour qu'un artiste conserve la
+  sienne, déposer ses ressources dans `android/app/src/<flavor>/res/`, qui a
+  priorité sur `main` lors de la fusion des ressources Android.
 
 ## Étape 4 — Le contenu (facultatif)
 

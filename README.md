@@ -130,6 +130,20 @@ Aucune clé n'est versionnée : Firebase et Supabase sont injectés par
 ### Panneau d'administration (web)
 
 ```powershell
+# Une fois : copier le modèle et le remplir.
+copy .env.example .env
+
+# Build du panneau, puis contrôle du livrable (`build/web`).
+powershell -ExecutionPolicy Bypass -File scripts/build_web.ps1
+
+firebase deploy --only hosting --project novaa-music-tchaddd
+```
+
+Le script lit les secrets dans `.env` (ou dans les variables du processus, en
+CI) et refuse de rendre la main si `build/web/main.dart.js` est absent : un
+dossier vide publierait une 404 silencieuse. Équivalent manuel :
+
+```powershell
 flutter build web -t lib/main_admin.dart --release --no-tree-shake-icons `
   --dart-define=FIREBASE_API_KEY=...                 `
   --dart-define=FIREBASE_APP_ID=...                  `
@@ -230,8 +244,37 @@ flutter build apk --release --flavor jethsonat --no-tree-shake-icons `
   --dart-define=SUPABASE_ANON_KEY=...
 ```
 
-> 🔒 `.env`, `releases/` et les `*.apk` sont ignorés par git : ne jamais
-> versionner les clés Supabase/Firebase ni les binaires.
+> 🔒 `.env`, `releases/`, les `*.apk` et le keystore (`*.jks`,
+> `android/key.properties`) sont ignorés par git : ne jamais versionner les clés
+> Supabase/Firebase, les binaires ni la clé de signature.
+
+#### Signature de release
+
+Sans `android/key.properties`, `android/app/build.gradle.kts` retombe sur la clé
+**debug** `~/.android/debug.keystore` : l'APK s'installe, mais aucun magasin ne
+l'accepte et un changement de clé ultérieur interdirait toute mise à jour. Pour
+signer réellement :
+
+```powershell
+# 1. Clé de release (à faire une seule fois, puis à sauvegarder hors du poste).
+& "$env:ProgramFiles\Android\Android Studio\jbr\bin\keytool.exe" -genkeypair -v `
+  -keystore android\app\upload-keystore.jks -validity 10000 `
+  -keyalg RSA -keysize 2048 -alias upload `
+  -dname "CN=Jethsonat, OU=Tete Roh Studio, O=Tete Roh Studio, L=Brazzaville, C=CG"
+
+# 2. android/key.properties (ignoré par git) — mêmes valeurs que ci-dessus.
+#    storeFile est relatif à android/app/.
+```
+
+```properties
+storeFile=upload-keystore.jks
+storePassword=<mot de passe du keystore>
+keyAlias=upload
+keyPassword=<mot de passe de la clé>
+```
+
+Le keystore et ses mots de passe sont **irremplaçables** : perdus, l'application
+ne peut plus être mise à jour sous la même identité.
 
 #### Application « 100 % audio » (`STREAM_ONLY=true`)
 
@@ -279,9 +322,14 @@ Le fichier `assets/covers/jethsonat_cover.png` est un **placeholder généré**
 > simple dépôt d'image est pris en compte au prochain build, sans
 > modification du `pubspec`.
 
-Sortie : `build/app/outputs/flutter-apk/app-<flavor>-release.apk` (≈ 72 Mo,
+Sortie : `build/app/outputs/flutter-apk/app-<flavor>-release.apk` (≈ 79 Mo,
 ABI `arm64-v8a`, `armeabi-v7a` et `x86_64`, `targetSdk 36`). Vérifié pour le
 flavor `jethsonat` : l'identifiant produit est `com.music.jethsonat`.
+
+> L'essentiel du poids est le moteur Flutter, dupliqué par ABI dans un APK
+> universel (~29 Mo de `libflutter.so` + `libapp.so`), puis les titres embarqués
+> dans `assets/audio/`. Un `flutter build appbundle --release` ou un
+> `--split-per-abi` divise ce total par deux environ.
 
 > Les APK vivent sous `build/`, que `flutter clean` efface : **copiez-les hors
 > de `build/`** dès qu'ils sont produits.

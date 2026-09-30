@@ -111,6 +111,14 @@ n'initialise `Supabase.initialize` que si les deux valeurs sont présentes, afin
 qu'un build sans `--dart-define=SUPABASE_*` démarre quand même et affiche
 l'erreur au moment de l'upload plutôt qu'au lancement.
 
+Le binaire est produit et publié par `scripts/build_web.ps1` (mêmes règles de
+lecture de `.env` que `scripts/build_apk.ps1`), puis `firebase deploy --only
+hosting --project novaa-music-tchaddd`. Le script échoue si
+`build/web/main.dart.js` est absent : `firebase.json` publie ce dossier, et un
+dossier vide mettrait en ligne une 404 silencieuse. La CI
+(`.github/workflows/deploy.yml`) exécute la même séquence sur `main`, avec
+`FIREBASE_SERVICE_ACCOUNT` comme seul secret d'authentification.
+
 ### Publication : le `artistId` ne peut pas être oublié
 
 Toutes les écritures passent par des services dédiés qui posent le champ
@@ -195,8 +203,6 @@ reste ainsi distinguable d'un catalogue vide.
 
 Les concerts passés sont masqués côté client ; ceux dont la date est inconnue sont
 conservés, l'organisateur n'ayant pas encore fixé la date.
-Les concerts passés sont masqués côté client ; ceux dont la date est inconnue sont
-conservés, l'organisateur n'ayant pas encore fixé la date.
 
 ## Publicité (AdMob)
 
@@ -222,7 +228,6 @@ Points structurants :
   mini-lecteur et la barre d'onglets ; elle réserve sa place uniquement une
   fois l'annonce chargée, pour éviter tout rechargement de mise en page.
 - `AdsService` gère l'interstitiel : chargement anticipé, cadence minimale de
-  deux minutes entre deux affichages, et libération de l'annonce à la fermeture.
   deux minutes entre deux affichages, et libération de l'annonce à la fermeture.
 
 ### iOS : un seul artiste, en preuve de concept
@@ -256,17 +261,38 @@ Aucun build iOS n'a pu être exécuté : la compilation exige macOS et Xcode, la
 machine courante étant sous Windows. Seuls le XML du `Info.plist` et
 l'analyse Dart sont vérifiés.
 
-## Assets et contenu embarqué
+## Signature de release (Android)
+
+`android/app/build.gradle.kts` lit `android/key.properties` s'il existe et
+retombe sinon sur `~/.android/debug.keystore`, uniquement pour que
+`flutter build apk` aboutisse sans configuration préalable. Un APK signé avec
+cette clé de debug s'installe en direct mais **n'est pas publiable** : l'identité
+d'une application installée est celle de sa clé, et en changer impose une
+désinstallation.
+
+- keystore : `android/app/upload-keystore.jks` (PKCS12, alias `upload`) ;
+- mots de passe : `android/key.properties`, ignoré par git au même titre que
+  `.env` ;
+- `storeFile` est résolu **relativement à `android/app/`** (Gradle résout
+  `file(…)` depuis le dossier du module).
+
+Ces deux fichiers sont irremplaçables : perdus, l'application ne peut plus être
+mise à jour sous la même identité. La procédure complète figure dans le README
+(§ « Signature de release »).
 
 ## Assets et contenu embarqué
 
 | Chemin | Contenu |
 | --- | --- |
 | `assets/catalog/catalog.json` | catalogue partagé, cloisonné par `artistId` |
-| `assets/audio/jethsonat_0*.mp3` | titres hors-ligne de Jethsonat |
-| `assets/audio/demo-*.wav`, `dilson_*.m4a` | audio de démonstration |
+| `assets/audio/jethsonat_*.m4a` | les 5 titres hors-ligne de Jethsonat |
 | `assets/covers/` | pochettes, dont `jethsonat_cover.png` |
 | `assets/icons/` | icônes de lancement par artiste |
+
+> Tout fichier déposé dans `assets/audio/` part dans **chaque** APK, quel que
+> soit le flavor : un dossier déclaré en bloc dans `pubspec.yaml` n'est pas
+> cloisonné par artiste. Ne doivent donc y figurer que les titres déclarés dans
+> `catalog.json` — un master oublié là voyage dans toutes les applications.
 
 Il n'y a plus de dossier `assets/artists/` : le catalogue est unique et cloisonné
 par `artistId`, donc aucun asset n'est propre à un artiste. `ARTIST_FOLDER` ne
@@ -307,8 +333,9 @@ vérifient notamment l'absence de données codées en dur.
 1. Authentification du public, pour remplacer `user_id` en dur.
 2. Confirmation du paiement Mobile Money (le billet est déjà un vrai document,
    mais la transaction opérateur n'est pas vérifiée).
-3. Signature de release : `android/app/build.gradle.kts` bascule encore sur la
-   clé de debug en l'absence de `android/key.properties`.
-4. Publication sur le Play Store (`flutter build appbundle --release`).
-5. Déplacer le registre `artistProfiles` vers Firestore, pour onboard un
+3. Publication sur le Play Store (`flutter build appbundle --release`) : la
+   signature release est en place (`android/key.properties` +
+   `android/app/upload-keystore.jks`), il reste à créer la fiche Play et à
+   téléverser l'AAB.
+4. Déplacer le registre `artistProfiles` vers Firestore, pour onboard un
    artiste sans modification de code.
