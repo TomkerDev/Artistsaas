@@ -5,6 +5,8 @@ import 'package:artistsaas/features/catalog/domain/datasources/catalog_data_sour
 import 'package:artistsaas/features/catalog/domain/entities/track.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/music_repository.dart';
 import 'package:artistsaas/features/catalog/domain/repositories/track_repository.dart';
+import 'package:artistsaas/features/favorites/domain/entities/favorite.dart';
+import 'package:artistsaas/features/favorites/domain/repositories/favorite_repository.dart';
 import 'package:artistsaas/features/library/domain/entities/download_progress.dart';
 import 'package:artistsaas/features/library/domain/entities/downloaded_track.dart';
 import 'package:artistsaas/features/library/domain/repositories/download_repository.dart';
@@ -352,5 +354,51 @@ final class FakeAudioPlayerService implements AudioPlayerService {
   @override
   Future<void> dispose() async {
     await _states.close();
+  }
+}
+
+/// Repository de favoris en mémoire : sert aux tests du bouton Favori et du
+/// lecteur, sans dépendre de `sqflite`. Renseigner [failure] simule un
+/// stockage inaccessible.
+final class FakeFavoriteRepository implements FavoriteRepository {
+  final List<Favorite> _favorites = <Favorite>[];
+
+  /// Échec à lever à chaque opération tant qu'il est renseigné.
+  Object? failure;
+
+  /// Copie des favoris persistés, pour les assertions du test.
+  List<Favorite> get favorites => List<Favorite>.unmodifiable(_favorites);
+
+  void _check() {
+    final Object? current = failure;
+    if (current != null) {
+      throw current;
+    }
+  }
+
+  @override
+  Future<List<Favorite>> getFavorites() async {
+    _check();
+    return List<Favorite>.of(_favorites);
+  }
+
+  @override
+  Future<void> addFavorite(String trackId) async {
+    _check();
+    if (!_favorites.any((Favorite f) => f.trackId == trackId)) {
+      _favorites.add(Favorite(trackId: trackId, addedAt: DateTime.now()));
+    }
+  }
+
+  @override
+  Future<void> removeFavorite(String trackId) async {
+    _check();
+    _favorites.removeWhere((Favorite f) => f.trackId == trackId);
+  }
+
+  @override
+  Future<bool> isFavorite(String trackId) async {
+    _check();
+    return _favorites.any((Favorite f) => f.trackId == trackId);
   }
 }

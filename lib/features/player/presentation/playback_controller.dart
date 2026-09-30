@@ -117,6 +117,11 @@ class PlaybackController extends Notifier<PlaybackState> {
 
   Future<void> _start(List<PlaybackMedia> queue, int initialIndex) async {
     final AudioPlayerService service = ref.read(audioPlayerServiceProvider);
+    // Abonnement AVANT la préparation : `stateStream` est un flux broadcast,
+    // les émissions de `setQueue` (file, index courant, durée, erreur) seraient
+    // perdues et l'écran resterait à l'état vide jusqu'au prochain événement du
+    // moteur — un délai particulièrement visible sur mobile.
+    _listen(service);
     try {
       await service.setQueue(queue, initialIndex: initialIndex);
     } on Object catch (error) {
@@ -125,7 +130,6 @@ class PlaybackController extends Notifier<PlaybackState> {
       );
       rethrow;
     }
-    _listen(service);
     await service.play();
   }
 

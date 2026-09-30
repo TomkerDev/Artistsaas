@@ -24,6 +24,7 @@ Future<ProviderContainer> pumpPlayer(WidgetTester tester) async {
         ),
         musicRepositoryProvider.overrideWithValue(FakeMusicRepository()),
         downloadRepositoryProvider.overrideWithValue(FakeDownloadRepository()),
+        favoriteRepositoryProvider.overrideWithValue(FakeFavoriteRepository()),
       ],
       child: const MaterialApp(home: PlayerScreen()),
     ),
@@ -82,4 +83,29 @@ void main() {
 
     expect(find.textContaining('Source illisible'), findsOneWidget);
   });
+
+  testWidgets(
+    'le cœur du lecteur bascule les favoris et confirme par un SnackBar',
+    (WidgetTester tester) async {
+      final ProviderContainer container = await pumpPlayer(tester);
+
+      await container
+          .read(playbackControllerProvider.notifier)
+          .playCatalog(<Track>[
+        buildTrack(id: 'a', title: 'Morceau à aimer'),
+      ]);
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.favorite_border));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byIcon(Icons.favorite), findsOneWidget);
+      expect(find.text('Ajouté aux favoris'), findsOneWidget);
+
+      await tester.pumpAndSettle();
+    },
+  );
 }

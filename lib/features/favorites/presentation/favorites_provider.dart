@@ -47,77 +47,46 @@ class FavoritesNotifier extends AsyncNotifier<List<Favorite>> {
   bool isFavorite(String trackId) => _favoriteIds.contains(trackId);
 
   /// Ajoute ou retire une piste des favoris.
+  ///
+  /// La bascule est **optimiste** : l'état observé par l'interface (et donc le
+  /// cœur du bouton) change à l'instant du tap, avant la persistance. Si le
+  /// stockage refuse l'écriture, l'état précédent est restauré puis l'erreur est
+  /// relancée — l'appelant (le bouton) l'affiche dans un `SnackBar`.
   Future<void> toggleFavorite(String trackId) async {
     final FavoriteRepository repository = ref.read(favoriteRepositoryProvider);
+    final bool wasFavorite = _favoriteIds.contains(trackId);
+    final List<Favorite> before = state.valueOrNull ?? const <Favorite>[];
 
-    if (_favoriteIds.contains(trackId)) {
-      await repository.removeFavorite(trackId);
+    if (wasFavorite) {
       _favoriteIds.remove(trackId);
-      state = state.when(
-        data: (List<Favorite> data) {
-          final List<Favorite> filtered =
-              data.where((Favorite f) => f.trackId != trackId).toList();
-          return AsyncData(filtered);
-        },
-        loading: () => const AsyncData(<Favorite>[]),
-        error: (_, __) => const AsyncData(<Favorite>[]),
+      state = AsyncData(
+        before.where((Favorite f) => f.trackId != trackId).toList(),
       );
     } else {
-      await repository.addFavorite(trackId);
-      _favoriteIds.add(trackId);
       final Favorite newFavorite = Favorite(
         trackId: trackId,
         addedAt: DateTime.now(),
       );
-      state = state.when(
-        data: (List<Favorite> data) {
-          final List<Favorite> updated = List<Favorite>.from(data)
-            ..add(newFavorite);
-          return AsyncData(updated);
-        },
-        loading: () => AsyncData(<Favorite>[newFavorite]),
-        error: (_, __) => AsyncData(<Favorite>[newFavorite]),
-      );
+      _favoriteIds.add(trackId);
+      state = AsyncData(<Favorite>[...before, newFavorite]);
     }
-  }
-}
 
-/// Bouton de favori : cœur vide ou rempli selon l'état.
-class FavoriteButton extends ConsumerWidget {
-  const FavoriteButton({
-    super.key,
-    required this.trackId,
-    this.size = 32,
-    this.onChanged,
-  });
-
-  final String trackId;
-  final double size;
-  final VoidCallback? onChanged;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bool isFavorite = ref.watch(favoritesNotifierProvider).when(
-          data: (List<Favorite> favorites) =>
-              favorites.any((Favorite f) => f.trackId == trackId),
-          loading: () => false,
-          error: (_, __) => false,
-        );
-
-    return IconButton(
-      icon: Icon(
-        isFavorite ? Icons.favorite : Icons.favorite_border,
-        color: isFavorite
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.onSurfaceVariant,
-        size: size,
-      ),
-      tooltip: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
-      onPressed: () {
-        ref.read(favoritesNotifierProvider.notifier).toggleFavorite(trackId);
-        onChanged?.call();
-      },
-    );
+    try {
+      if (wasFavorite) {
+        await repository.removeFavorite(trackId);
+      } else {
+        await repository.addFavorite(trackId);
+      }
+    } on Object {
+      // Persistance refusée : le cœur redevient cohérent avec le stockage.
+      if (wasFavorite) {
+        _favoriteIds.add(trackId);
+      } else {
+        _favoriteIds.remove(trackId);
+      }
+      state = AsyncData(before);
+      rethrow;
+    }
   }
 }
 

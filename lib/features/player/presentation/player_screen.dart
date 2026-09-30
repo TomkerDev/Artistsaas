@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/config/app_config.dart';
-import '../../../app/di/app_providers.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/duration_formatter.dart';
-import '../../favorites/domain/services/favorites_service.dart';
-import '../../favorites/presentation/favorites_provider.dart';
+import '../../favorites/presentation/widgets/favorite_button.dart';
 import '../domain/entities/loop_mode.dart';
 import '../domain/entities/playback_media.dart';
 import '../domain/entities/playback_state.dart';
@@ -29,7 +27,7 @@ class PlayerScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text(AppStrings.playerTitle)),
       body: state.hasCurrent
           ? _NowPlaying(state: state)
-          : const _PlayerEmptyView(),
+          : _PlayerEmptyView(state: state),
     );
   }
 }
@@ -44,8 +42,6 @@ class _NowPlaying extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ThemeData theme = Theme.of(context);
     final PlaybackMedia media = state.currentMedia!;
-    final bool isFavorite =
-        ref.watch(favoriteIdsProvider).contains(media.trackId);
 
     return Center(
       child: SingleChildScrollView(
@@ -72,10 +68,9 @@ class _NowPlaying extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                _FavoriteButton(
-                  isFavorite: isFavorite,
-                  onToggle: () => _toggleFavorite(ref, media.trackId),
-                ),
+                // Cœur piloté par `FavoriteButton` : état Riverpod, persistance
+                // locale et `SnackBar` de confirmation en un seul endroit.
+                FavoriteButton(trackId: media.trackId, size: 28),
               ],
             ),
             const SizedBox(height: 4),
@@ -134,17 +129,6 @@ class _NowPlaying extends ConsumerWidget {
     );
   }
 
-  void _toggleFavorite(WidgetRef ref, String trackId) {
-    final FavoritesService service = ref.read(favoritesServiceProvider);
-    final bool currentlyFavorite =
-        ref.read(favoriteIdsProvider).contains(trackId);
-    if (currentlyFavorite) {
-      service.removeFavorite(trackId);
-    } else {
-      service.addFavorite(trackId);
-    }
-  }
-
   void _shareTrack(BuildContext context, PlaybackMedia media) {
     final String text =
         'Découvre l\'application officielle de ${media.artist} sur '
@@ -153,27 +137,6 @@ class _NowPlaying extends ConsumerWidget {
     Share.share(
       text,
       subject: 'Écouter ${media.artist} sur ${AppStrings.appTitle}',
-    );
-  }
-}
-
-/// Bouton de favori du lecteur : cœur vide ou rempli.
-class _FavoriteButton extends StatelessWidget {
-  const _FavoriteButton({required this.isFavorite, required this.onToggle});
-
-  final bool isFavorite;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    return IconButton(
-      tooltip: isFavorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
-      onPressed: onToggle,
-      icon: Icon(
-        isFavorite ? Icons.favorite : Icons.favorite_border,
-        color: isFavorite ? colors.error : colors.onSurfaceVariant,
-      ),
     );
   }
 }
@@ -471,8 +434,14 @@ class _PlaybackError extends ConsumerWidget {
 }
 
 /// État vide : aucun morceau sélectionné dans la file.
+///
+/// L'éventuelle erreur de préparation de lecture y est affichée : sans cela,
+/// un échec (source illisible, résolution impossible) se traduit par un écran
+/// muet où « rien ne fonctionne », sans le moindre indice à l'écran.
 class _PlayerEmptyView extends StatelessWidget {
-  const _PlayerEmptyView();
+  const _PlayerEmptyView({required this.state});
+
+  final PlaybackState state;
 
   @override
   Widget build(BuildContext context) {
@@ -491,6 +460,10 @@ class _PlayerEmptyView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyLarge,
             ),
+            if (state.hasError) ...<Widget>[
+              const SizedBox(height: 16),
+              _PlaybackError(state: state),
+            ],
           ],
         ),
       ),
