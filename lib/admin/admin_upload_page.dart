@@ -266,6 +266,27 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       return;
     }
 
+    // Étape 0 : session Supabase e-mail/mot de passe. Aucune connexion
+    // anonyme n'est tentée (désactivée sur ce projet) : si aucune session
+    // n'est active, on demande les identifiants du compte admin.
+    if (!await _promptSupabaseSignIn()) {
+      if (mounted) {
+        setState(() {
+          _errorMessage =
+              'Connexion Supabase requise : la publication est interrompue.';
+          _publishing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Connectez le compte admin Supabase pour téléverser des médias.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     try {
       // Étape A : MP3 sur Supabase Storage
       audioPublicUrl = await SupabaseStorageService.uploadMedia(
@@ -343,6 +364,120 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
       }
     } finally {
       if (mounted) setState(() => _publishing = false);
+    }
+  }
+
+  /// Ouvre la boîte de dialogue de connexion Supabase si aucune session
+  /// n'est active.
+  ///
+  /// Renvoie `true` si une session est disponible (déjà établie, ou créée
+  /// dans la boîte de dialogue), `false` si l'utilisateur a annulé ou si la
+  /// connexion a échoué. Les identifiants correspondent à un compte créé
+  /// dans Supabase → Authentication → Users ; aucune connexion anonyme n'est
+  /// tentée.
+  Future<bool> _promptSupabaseSignIn() async {
+    if (SupabaseStorageService.hasSession) {
+      return true;
+    }
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController passwordController = TextEditingController();
+    String? errorMessage;
+    bool busy = false;
+
+    try {
+      final bool? signedIn = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) => StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) =>
+              AlertDialog(
+            title: const Text('Connexion Supabase requise'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Le stockage des médias utilise Supabase Storage. '
+                  'Connectez le compte admin créé dans Supabase → '
+                  'Authentication → Users (les connexions anonymes sont '
+                  'désactivées sur ce projet).',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Supabase',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Mot de passe',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (errorMessage != null) ...<Widget>[
+                  const SizedBox(height: 12),
+                  Text(
+                    errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ],
+                if (busy) ...<Widget>[
+                  const SizedBox(height: 16),
+                  const Center(child: CircularProgressIndicator()),
+                ],
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed:
+                    busy ? null : () => Navigator.pop(dialogContext, false),
+                child: const Text('Annuler'),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          busy = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          await SupabaseStorageService.signInAsAdmin(
+                            email: emailController.text.trim(),
+                            password: passwordController.text,
+                          );
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext, true);
+                          }
+                        } on StateError catch (error) {
+                          setDialogState(() {
+                            busy = false;
+                            errorMessage = error.message;
+                          });
+                        } catch (error) {
+                          setDialogState(() {
+                            busy = false;
+                            errorMessage = '$error';
+                          });
+                        }
+                      },
+                child: const Text('Se connecter'),
+              ),
+            ],
+          ),
+        ),
+      );
+      return signedIn == true;
+    } finally {
+      emailController.dispose();
+      passwordController.dispose();
     }
   }
 
@@ -486,6 +621,15 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          if (!SupabaseStorageService.hasSession) ...<Widget>[
+                            _SupabaseSignInBanner(
+                              onConnect: () async {
+                                await _promptSupabaseSignIn();
+                                if (mounted) setState(() {});
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                           _buildKpiSection(colors),
                           const SizedBox(height: 24),
                           _buildSectionHeader(
@@ -633,6 +777,18 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                               AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>>
                                   snapshot,
                             ) {
+                              if (snapshot.hasError) {
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Text(
+                                    'Liste des morceaux indisponible : '
+                                        '${snapshot.error}',
+                                    style: TextStyle(color: colors.error),
+                                  ),
+                                );
+                              }
                               final List<Map<String, dynamic>> tracks =
                                   snapshot.data?.docs
                                           .map(
@@ -1364,6 +1520,49 @@ class _StatCard extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Bandeau invitant à connecter un compte admin Supabase.
+///
+/// Les connexions anonymes étant désactivées sur ce projet, aucun
+/// téléversement ne peut partir sans session Supabase : le bandeau ouvre la
+/// boîte de dialogue de connexion e-mail/mot de passe.
+class _SupabaseSignInBanner extends StatelessWidget {
+  const _SupabaseSignInBanner({required this.onConnect});
+
+  /// Ouvre la boîte de dialogue de connexion Supabase.
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.error),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.cloud_off, color: colors.onErrorContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Session Supabase absente : les téléversements seront refusés. '
+              'Connectez le compte admin du stockage.',
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+          ),
+          const SizedBox(width: 12),
+          FilledButton.tonal(
+            onPressed: onConnect,
+            child: const Text('Connecter'),
+          ),
+        ],
       ),
     );
   }

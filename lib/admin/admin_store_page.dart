@@ -162,6 +162,9 @@ class _DashboardStats extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
+        if (snapshot.hasError) {
+          return Center(child: _FirestoreStreamError(error: snapshot.error));
+        }
         if (!snapshot.hasData) {
           return const Center(child: Text('Statistiques indisponibles.'));
         }
@@ -317,6 +320,9 @@ class _ProfileViewState extends State<_ProfileView> {
   final TextEditingController _bio = TextEditingController();
   final TextEditingController _distinction = TextEditingController();
 
+  /// `true` pendant l'écriture du profil Firestore.
+  bool _saving = false;
+
   @override
   void initState() {
     super.initState();
@@ -349,23 +355,50 @@ class _ProfileViewState extends State<_ProfileView> {
   }
 
   Future<void> _save() async {
-    final ArtistProfile? profile = artistProfileFor(_artistId);
-    await FirebaseFirestore.instance
-        .collection('artist_profiles')
-        .doc(_artistId)
-        .set(<String, Object?>{
-      'artistId': _artistId,
-      'name': profile?.stageName ?? adminArtistName(_artistId),
-      'label': profile?.label ?? 'Tete Roh Studio',
-      'biography': _bio.text.trim(),
-      'distinction': _distinction.text.trim(),
-      'updated_at': FieldValue.serverTimestamp(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profil enregistré.')));
+    if (_bio.text.trim().isEmpty) {
+      _toast('La biographie est obligatoire.');
+      return;
     }
+    setState(() => _saving = true);
+    try {
+      final ArtistProfile? profile = artistProfileFor(_artistId);
+      await FirebaseFirestore.instance
+          .collection('artist_profiles')
+          .doc(_artistId)
+          .set(<String, Object?>{
+        'artistId': _artistId,
+        'name': profile?.stageName ?? adminArtistName(_artistId),
+        'label': profile?.label ?? 'Tete Roh Studio',
+        'biography': _bio.text.trim(),
+        'distinction': _distinction.text.trim(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        _toast('Profil enregistré.');
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        _toast('Enregistrement refusé : ${error.message}');
+      }
+    } catch (error) {
+      if (mounted) {
+        _toast('Échec de l\'enregistrement : $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  /// Message court affiché dans un [SnackBar] (no-op si démonté).
+  void _toast(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -414,8 +447,14 @@ class _ProfileViewState extends State<_ProfileView> {
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _save,
-              child: const Text('Enregistrer le profil'),
+              onPressed: _saving ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Enregistrer le profil'),
             ),
           ],
         ),
@@ -1142,6 +1181,9 @@ class _TicketList extends StatelessWidget {
           .orderBy('status')
           .snapshots(),
       builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: _FirestoreStreamError(error: snapshot.error));
+        }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -1169,6 +1211,40 @@ class _TicketList extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+/// Message d'erreur lisible pour un flux Firestore en échec.
+///
+/// Un index composite encore en cours de création se manifeste par une
+/// erreur `failed-precondition` (« The query requires an index ») :
+/// l'interface ne doit pas rester figée sur un spinner, on explique donc
+/// comment déployer `firestore.indexes.json`.
+class _FirestoreStreamError extends StatelessWidget {
+  const _FirestoreStreamError({required this.error});
+
+  /// Erreur reçue par le `StreamBuilder`.
+  final Object? error;
+
+  @override
+  Widget build(BuildContext context) {
+    final String raw = error?.toString() ?? 'Erreur inconnue.';
+    final bool indexPending =
+        raw.contains('failed-precondition') ||
+        raw.contains('requires an index');
+    final String message = indexPending
+        ? 'Index Firestore en cours de création. Déployez-les avec '
+              '« firebase deploy --only firestore:indexes », puis rechargez '
+              'cette page dans une minute.'
+        : 'Données indisponibles : $raw';
+    return Padding(
+      padding: const EdgeInsets.all(8),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Theme.of(context).colorScheme.error),
+      ),
     );
   }
 }

@@ -22,9 +22,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 ///   authentifiés (ou public si le bucket est en lecture/écriture libre) ;
 /// - avoir des **règles CORS** pour `PUT` et `POST` depuis `web.app`.
 ///
-/// Si la connexion échoue malgré les defines corrects, un
-/// `signInAnonymously()` est tenté automatiquement — le bucket `artist-media`
-/// doit alors autoriser l'écriture aux `auth.role() == 'anonymous'`.
+/// Authentification (Option A) : seul un compte Supabase Auth e-mail/mot de
+/// passe (créé dans Supabase → Authentication → Users) peut téléverser.
+/// `signInAsAdmin(email, password)` doit avoir été appelé avant le premier
+/// upload — les connexions anonymes sont désactivées sur ce projet et ne sont
+/// jamais tentées (`AuthApiException: Anonymous sign-ins are disabled` sinon).
 class SupabaseStorageService {
   SupabaseStorageService._();
 
@@ -79,27 +81,60 @@ class SupabaseStorageService {
 
   /// S'assure qu'une session Supabase valide existe avant un upload.
   ///
-  /// Si le client n'a pas de session (cas typique : l'utilisateur s'est
-  /// authentifié via Firebase, pas Supabase), tente une **connexion
-  /// anonyme**. Le bucket doit autoriser l'écriture aux utilisateurs
-  /// anonymes (`auth.role() == 'anonymous'`).
+  /// Option A : aucun `signInAnonymously()` n'est tenté ici — les connexions
+  /// anonymes sont désactivées sur ce projet
+  /// (`AuthApiException: Anonymous sign-ins are disabled`). La session doit
+  /// avoir été établie via [signInAsAdmin] (compte admin e-mail/mot de passe
+  /// créé dans Supabase → Authentication → Users).
   ///
-  /// Si la connexion anonyme échoue, lève l'exception pour être affichée
-  /// à l'utilisateur avec un message exploitable.
+  /// Lève un [StateError] avec la marche à suivre si aucune session n'existe.
   static Future<void> ensureAuthenticated() async {
     final SupabaseClient client = Supabase.instance.client;
     final Session? session = client.auth.currentSession;
     if (session != null && !session.isExpired) {
-      return; // ✅ déjà authentifié
+      return; // Déjà authentifié.
     }
+    throw StateError(
+      'Aucune session Supabase. Connectez le compte admin du stockage '
+      'via SupabaseStorageService.signInAsAdmin(email, password) '
+      '(compte créé dans Supabase → Authentication → Users), puis '
+      'réessayez. Les connexions anonymes sont désactivées sur ce projet.',
+    );
+  }
+
+  /// Connecte le compte admin du stockage (Supabase Auth e-mail/mot de passe).
+  ///
+  /// À appeler une fois depuis le panneau d'administration avant le premier
+  /// upload (par exemple après la connexion Firebase). La session est
+  /// conservée par le SDK ; [ensureAuthenticated] la réutilise ensuite.
+  static Future<void> signInAsAdmin({
+    required String email,
+    required String password,
+  }) async {
+    ensureInitialized();
     try {
-      await client.auth.signInAnonymously();
-    } on Object catch (error) {
+      // ✅ Connexion e-mail/mot de passe : ne dépend PAS des "anonymous
+      // sign-ins" (désactivés sur ce projet) et fonctionne avec une policy
+      // Storage `TO authenticated`.
+      await client.auth.signInWithPassword(email: email, password: password);
+    } on AuthException catch (e) {
       throw StateError(
-        'Impossible de créer une session Supabase (connexion anonyme échouée) : '
-        '$error. Vérifiez que le bucket `artist-media` autorise les uploads '
-        'aux utilisateurs anonymes ou authentifiés dans la console Supabase.',
+        'Connexion Supabase impossible pour $email : ${e.message}. '
+        'Vérifiez le compte dans Supabase → Authentication → Users.',
       );
+    }
+  }
+
+  /// `true` si une session Supabase non expirée est active.
+  ///
+  /// Pratique pour afficher un avertissement dans l'UI avant l'upload.
+  /// Renvoie `false` si Supabase n'a pas encore été initialisé.
+  static bool get hasSession {
+    try {
+      final Session? session = client.auth.currentSession;
+      return session != null && !session.isExpired;
+    } on Object {
+      return false;
     }
   }
 
@@ -117,7 +152,7 @@ class SupabaseStorageService {
   ///
   /// `upsert: true` évite les conflits 409 sur fichiers existants.
   /// Le `contentType` est détecté automatiquement via [_contentTypeFor].
-  /// Une connexion Supabase anonyme est créée si nécessaire (voir [ensureAuthenticated]).
+  /// Une session Supabase admin est requise (voir [ensureAuthenticated]).
   ///
   /// Lève une [StateError] détaillée si le téléversement échoue
   /// (403 Forbidden, 404 bucket introuvable, 409 conflit, réseau, etc.).
