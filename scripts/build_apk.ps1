@@ -111,7 +111,11 @@ $admobBannerId     = Get-Config 'ADMOB_BANNER_ID'
 $admobInterstitial = Get-Config 'ADMOB_INTERSTITIAL_ID'
 
 if ($admobAppId) {
+    # Transmis à la fois à Gradle (meta-data du manifeste, lu au démarrage
+    # natif) et à Dart (AdsConfig via --dart-define) : sans les deux, le SDK
+    # Android crash à l'ouverture ou la publicité reste inactive en release.
     $env:ADMOB_APP_ID = $admobAppId
+    $defines += "--dart-define=ADMOB_APP_ID=$admobAppId"
 }
 if ($admobBannerId) {
     $defines += "--dart-define=ADMOB_BANNER_ID=$admobBannerId"

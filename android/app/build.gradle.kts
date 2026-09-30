@@ -25,12 +25,17 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.tomker.artistsaas"
-        // Identifiant AdMob Android, lu depuis `key.properties` ou l'environnement.
-        // Doit rester vide tant que l'artiste n'a pas de compte AdMob : le SDK
-        // démarre alors sans publicité (cf. AdsConfig.adsEnabled). Chaque artiste
-        // dispose de son propre compte, donc de sa propre valeur.
+        // Identifiant AdMob Android, lu depuis la variable d'environnement.
+        // Le SDK Google Mobile Ads **crash au démarrage du processus** (avant
+        // Flutter) si le meta-data `com.google.android.gms.ads.APPLICATION_ID`
+        // du manifeste est absent, vide ou mal formé. À défaut d'ID valide
+        // fourni par l'artiste, on injecte l'ID de test officiel de Google :
+        // le build démarre toujours, et la publicité reste désactivée côté Dart
+        // (AdsConfig.adsEnabled == false sans --dart-define).
+        val envAdmobAppId = System.getenv("ADMOB_APP_ID") ?: ""
         manifestPlaceholders["ADMOB_APP_ID"] =
-            System.getenv("ADMOB_APP_ID") ?: ""
+            if (envAdmobAppId.startsWith("ca-app-pub-")) envAdmobAppId
+            else "ca-app-pub-3940256099942544~3347511713"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Figé explicitement (Android 7.0) : la valeur par défaut de Flutter peut
