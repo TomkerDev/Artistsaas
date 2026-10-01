@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:artistsaas/features/store/domain/store_models.dart';
 import 'package:artistsaas/features/store/presentation/store_providers.dart';
 import 'package:artistsaas/features/store/presentation/store_show_screen.dart';
@@ -118,6 +120,54 @@ void main() {
 
       expect(find.text('Billetterie indisponible.'), findsOneWidget);
       expect(find.text('Réessayer'), findsOneWidget);
+    });
+
+    testWidgets('remplace l\'erreur brute d\'index par un message d\'attente', (
+      WidgetTester tester,
+    ) async {
+      final FakeStoreRepository repository = FakeStoreRepository()
+        ..failure = Exception(
+          '[cloud_firestore/failed-precondition] The query requires an index.',
+        );
+
+      await pumpStore(tester, repository);
+
+      expect(find.textContaining('index Firestore'), findsOneWidget);
+      // La trace technique ne doit jamais fuiter vers l'utilisateur mobile.
+      expect(find.textContaining('failed-precondition'), findsNothing);
+      expect(find.text('Réessayer'), findsOneWidget);
+    });
+
+    testWidgets('affiche un squelette tant que les données arrivent', (
+      WidgetTester tester,
+    ) async {
+      final Completer<void> gate = Completer<void>();
+      final FakeStoreRepository repository = FakeStoreRepository()
+        ..loadGate = gate;
+
+      await pumpStore(tester, repository);
+
+      expect(find.byKey(skeletonKey), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      // L'autre section charge en parallèle et annonce elle aussi la mise en
+      // page attendue.
+      await tester.tap(find.text('Merchandise'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(merchSkeletonKey), findsOneWidget);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      // La section affichée laisse la place au contenu dès l'arrivée des
+      // données : plus aucun squelette.
+      expect(find.byKey(merchSkeletonKey), findsNothing);
+
+      await tester.tap(find.text('Billetterie'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(skeletonKey), findsNothing);
+      expect(find.text('Aucun concert annoncé'), findsOneWidget);
     });
 
     testWidgets('désactive la billetterie quand il n\'y a plus de place', (

@@ -84,8 +84,8 @@ Cinq collections, cloisonnées par `artistId` côté requête.
 | Collection | Écrit par | Lue par | Index |
 | --- | --- | --- | --- |
 | `tracks` | panneau (upload) | application | `artistId` + `createdAt` |
-| `events` | panneau (billetterie) | application | `artistId` + `date` |
-| `merch` | panneau (boutique) | application | `artistId` + `name` |
+| `events` | panneau (billetterie) | application | `artistId` + `date` (ASC pour l'app, DESC pour les ajouts) |
+| `merch` | panneau (boutique) | application | `artistId` + `name`, `artistId` + `created_at` |
 | `tickets` | application (public) | application, panneau | `event_id` |
 | `admin_users` | console Firebase | panneau | — |
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:artistsaas/features/store/data/store_repository.dart';
 import 'package:artistsaas/features/store/domain/store_models.dart';
 
@@ -18,11 +20,17 @@ final class FakeStoreRepository implements StoreRepository {
   /// Erreur levée par les flux, pour tester le rendu d'un échec réseau.
   Object? failure;
 
+  /// Verrou de chargement : les flux restent en attente tant que ce
+  /// `Completer` n'est pas complété, ce qui permet d'examiner l'état de
+  /// chargement de l'écran (squelette) sans dépendre d'un minuteur.
+  Completer<void>? loadGate;
+
   /// Nombre de réservations demandées.
   int ticketCount = 0;
 
   @override
   Stream<List<ShowEvent>> watchEvents({String? artistId}) async* {
+    await loadGate?.future;
     if (failure != null) {
       throw failure!;
     }
@@ -31,6 +39,7 @@ final class FakeStoreRepository implements StoreRepository {
 
   @override
   Stream<List<MerchProduct>> watchMerch({String? artistId}) async* {
+    await loadGate?.future;
     if (failure != null) {
       throw failure!;
     }

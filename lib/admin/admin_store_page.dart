@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/constants/artist_config.dart';
+import '../core/errors/firestore_error_message.dart';
 import '../features/store/data/store_admin_service.dart';
 import '../features/store/data/store_repository.dart';
 import '../features/store/domain/store_models.dart';
@@ -1230,9 +1231,11 @@ class _FirestoreStreamError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String raw = error?.toString() ?? 'Erreur inconnue.';
-    final bool indexPending =
-        raw.contains('failed-precondition') ||
-        raw.contains('requires an index');
+    // Détection mutualisée avec l'application mobile
+    // (`core/errors/firestore_error_message.dart`). Seul le texte diffère : le
+    // panneau est un outil de production, la consigne de déploiement y est donc
+    // utile, là où l'application affiche une attente.
+    final bool indexPending = isMissingFirestoreIndex(error);
     final String message = indexPending
         ? 'Index Firestore en cours de création. Déployez-les avec '
               '« firebase deploy --only firestore:indexes », puis rechargez '

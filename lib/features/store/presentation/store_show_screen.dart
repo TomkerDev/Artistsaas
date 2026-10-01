@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/config/app_config.dart';
 import '../../../core/constants/artist_config.dart';
+import '../../../core/errors/firestore_error_message.dart';
 import '../data/store_repository.dart';
 import '../domain/store_models.dart';
 import 'store_providers.dart';
@@ -284,10 +285,13 @@ class _StoreShowScreenState extends ConsumerState<StoreShowScreen> {
     );
 
     return events.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _StoreSkeleton(grid: false),
       error: (Object error, StackTrace stack) => _ErrorView(
-        message: 'Billetterie indisponible.',
-        detail: '$error',
+        message: firestoreErrorMessage(
+          error,
+          fallback: 'Billetterie indisponible.',
+        ),
+        detail: firestoreErrorDetail(error),
         onRetry: () => ref.invalidate(upcomingEventsProvider),
       ),
       data: (List<ShowEvent> list) {
@@ -529,10 +533,13 @@ class _StoreShowScreenState extends ConsumerState<StoreShowScreen> {
     final AsyncValue<List<MerchProduct>> products = ref.watch(merchProvider);
 
     return products.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const _StoreSkeleton(grid: true),
       error: (Object error, StackTrace stack) => _ErrorView(
-        message: 'Boutique indisponible.',
-        detail: '$error',
+        message: firestoreErrorMessage(
+          error,
+          fallback: 'Boutique indisponible.',
+        ),
+        detail: firestoreErrorDetail(error),
         onRetry: () => ref.invalidate(merchProvider),
       ),
       data: (List<MerchProduct> list) {
@@ -811,14 +818,19 @@ class _ErrorView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Text(
-              detail,
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
+            // Le détail technique est facultatif : un index Firestore en cours
+            // de création n'a rien de lisible à afficher sous son message
+            // d'attente.
+            if (detail.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                detail,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: onRetry,
@@ -831,3 +843,88 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+
+/// Squelette de chargement de la boutique.
+///
+/// Trois cartes grises figées (billetterie) ou quatre vignettes (merchandise)
+/// annoncent la mise en page avant l'arrivée des données. Un indicateur
+/// tournant laissait, lui, un écran vide pour toute la durée de l'attente
+/// réseau — sans rien indiquer du contenu attendu.
+class _StoreSkeleton extends StatelessWidget {
+  const _StoreSkeleton({required this.grid});
+
+  /// `true` pour la grille merchandise, `false` pour la liste des concerts.
+  final bool grid;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color block = Theme.of(context).colorScheme.surfaceContainerHighest;
+    if (grid) {
+      return GridView.count(
+        key: merchSkeletonKey,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: .78,
+        children: <Widget>[
+          for (int i = 0; i < 4; i++) _SkeletonBlock(color: block),
+        ],
+      );
+    }
+    return ListView(
+      key: skeletonKey,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: <Widget>[
+        for (int i = 0; i < 3; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _SkeletonBlock(color: block, height: 20),
+                const SizedBox(height: 10),
+                _SkeletonBlock(color: block, height: 14),
+                const SizedBox(height: 8),
+                _SkeletonBlock(color: block, height: 14, widthFactor: .6),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Rectangle uni du squelette, arrondi comme les cartes qu'il préfigure.
+class _SkeletonBlock extends StatelessWidget {
+  const _SkeletonBlock({
+    required this.color,
+    this.height = 16,
+    this.widthFactor = 1,
+  });
+
+  final Color color;
+  final double height;
+
+  /// Fraction de la largeur occupée : une ligne secondaire plus courte dessine
+  /// une hiérarchie lisible.
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) => FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+}
+
+/// Clé du squelette de la billetterie, également utilisée par les tests.
+const Key skeletonKey = ValueKey<String>('store-skeleton');
+
+/// Clé du squelette de la grille merchandise, également utilisée par les tests.
+const Key merchSkeletonKey = ValueKey<String>('store-skeleton-merch');
