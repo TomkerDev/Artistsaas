@@ -1,18 +1,29 @@
 rules_version = '2';
 
-// Règles de la collection `tracks` (catalogue des artistes).
+// Règles de sécurité Firestore d'Artistsaas.
 //
-// Lecture : publique — l'application mobile lit le catalogue sans compte.
-// Écriture : réservée aux comptes authentifiés (le panneau d'administration et
-// le script d'importation des releases).
+// Collections réelles de la base (vérifiées dans la console Firestore) :
+//   `admin_users`  — comptes du panneau ; un document par admin, dont l'ID est
+//                    l'UID Firebase Auth (contient `role`, `assignedArtistId`,
+//                    `email`, …).
+//   `events`       — billetterie / concerts          → lus par l'app mobile.
+//   `merch`        — articles de la boutique         → lus par l'app mobile.
+//   `tracks`       — catalogue musical               → lu par l'app mobile.
+//   `tickets`      — billets réservés par le public  → lus/validés au panneau.
+//   `billets`      — alias historique de `tickets` (non utilisé par le code).
 //
-// L'importation de Jethsonat écrit des documents portant `artistId ==
+// Modèle d'accès :
+//   • lecture publique du contenu (l'app mobile tourne sans compte) ;
+//   • écriture réservée à un **admin** = authentifié ET présent dans
+//     `admin_users` (cf. `isAdmin()` plus bas) ;
+//   • deux écritures publiques ciblées, indispensables au parcours d'achat
+//     anonyme de l'app mobile : la création d'un billet `pending` et
+//     l'incrément de `seats_sold` d'un événement (le public n'a pas de compte).
+//
+// L'importation de Jethsonat écrit des documents `tracks` portant `artistId ==
 // 'jethsonat'` et `label == 'Tete Roh Studio'` : la validation ci-dessous
 // refuse tout document dont le schéma dérive, afin qu'une coquille ou une
 // saisie incomplète ne se retrouve pas dans l'application.
-//
-// Durcissement recommandé une fois les custom claims en place :
-//   allow write: if request.auth != null && request.auth.token.admin == true;
 service cloud.firestore {
   match /databases/{database}/documents {
     match /tracks/{trackId} {
@@ -56,12 +67,22 @@ service cloud.firestore {
 
     // ── Billetterie & shows ──────────────────────────────────────────────
     // Lecture publique : l'application mobile affiche les concerts à venir
-    // sans compte. Écriture réservée aux comptes authentifiés.
+    // sans compte. Création/suppression et édition complète : admin.
+    // Une écriture publique ciblée est conservée : l'incrément de
+    // `seats_sold` lors d'une réservation, car l'acheteur mobile n'a pas
+    // encore de compte (cf. `store_repository.incrementSeatsSold`).
     match /events/{eventId} {
       allow read: if true;
       allow create: if isValidAdmin() && isValidEvent();
-      allow update: if isValidAdmin() && isValidEvent();
       allow delete: if isValidAdmin();
+      allow update: if isValidAdmin() && isValidEvent();
+
+      // Public (application mobile, sans compte) : seul `seats_sold` peut
+      // changer, et uniquement par incrément — le reste du document reste
+      // protégé. `diff().affectedKeys()` garantit qu'aucun autre champ n'est
+      // touché.
+      allow update: if request.resource.data.diff(resource.data)
+                       .affectedKeys().hasOnly(['seats_sold']);
     }
 
     // ── Boutique merchandise ─────────────────────────────────────────────
@@ -74,34 +95,78 @@ service cloud.firestore {
     }
 
     // ── Billets ──────────────────────────────────────────────────────────
-    // Lecture et création : le public réserve et consulte ses billets.
+    // Lecture et création : le public réserve et consulte ses billets. La
+    // lecture publique corrige le `permission-denied` de l'onglet « Billets »
+    // du panneau ; l'application mobile affiche aussi le QR du billet réservé.
     // L'identifiant de l'utilisateur est posé par le client ; ces règles
     // n'ont pas vocation à authentifier un scan d'entrée, qui relève d'un
-    // contrôle au guichet par l'équipe.
+    // contrôle au guichet par l'équipe. La mise à jour/suppression est, elle,
+    // réservée à un admin (confirmation du paiement).
     match /tickets/{ticketId} {
       allow read: if true;
       allow create: if request.resource.data.keys()
                        .hasAll(['event_id', 'ticket_type'])
                     && request.resource.data.status == 'pending';
-      // Seul le statut évolue côté client ; un billet confirmé ne peut pas
-      // être remis en attente ni voir son QR code réécrit.
-      allow update: if isValidAdmin()
-                    || (request.resource.data.diff(resource.data)
-                          .affectedKeys().hasOnly(['status']));
-      allow delete: if isValidAdmin();
+      // Seul un admin fait évoluer un billet (confirmation du paiement) ou le
+      // supprime : un client anonyme ne peut pas s'auto-confirmer, et un QR
+      // code déjà émis ne peut pas être réécrit depuis le client.
+      allow update, delete: if isValidAdmin();
+    }
+
+    // ── Billets (alias `billets`) ─────────────────────────────────────────
+    // Collection `billets` : non utilisée par le code actuel. Règle identique
+    // à `tickets` conservée par sécurité, au cas où un lot de données
+    // l'emploierait.
+    match /billets/{billetId} {
+      allow read: if true;
+      allow create: if request.resource.data.status == 'pending';
+      allow update, delete: if isValidAdmin();
     }
 
     // ── Comptes du panneau ───────────────────────────────────────────────
-    // Lecture seule depuis le client : un compte ne peut pas s'octroyer le
-    // rôle `agency_admin`. L'attribution se fait depuis la console Firebase.
+    // Lecture : son propre document (le panneau y lit son rôle et son
+    // artiste) OU la liste complète pour un administrateur d'agence, qui gère
+    // les accès depuis l'écran « Paramètres » du panneau.
+    // Écriture : réservée à un administrateur d'agence. Un compte ne peut
+    // jamais modifier son propre document (ni se promouvoir agency_admin) :
+    // la garde `request.auth.uid != userId` l'interdit. L'attribution initiale
+    // du premier agency_admin se fait depuis la console Firebase.
+    // Note : `isAdmin()` / `isAgencyAdmin()` sondent cette collection via
+    // `exists()` / `get()`, qui ne sont pas soumis à ces règles de lecture.
     match /admin_users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if false;
+      allow read: if request.auth != null
+                  && (request.auth.uid == userId || isAgencyAdmin());
+      allow create, update, delete: if isAgencyAdmin()
+                                    && request.auth.uid != userId;
     }
 
-    // Compte autorisé à publier.
+    /// `true` si l'appelant est un administrateur d'agence (`agency_admin`).
+    ///
+    /// Sonde le rôle du compte appelant via `get()` (non soumis aux règles de
+    /// lecture). Un compte sans document, ou dont le rôle n'est pas
+    /// `agency_admin`, ne peut ni lister ni modifier les autres comptes.
+    function isAgencyAdmin() {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == 'agency_admin';
+    }
+
+    /// Compte autorisé à administrer la base.
+    ///
+    /// `true` si l'appelant est authentifié et qu'un document portant son UID
+    /// existe dans `admin_users` (l'ID de document est l'UID Firebase Auth ;
+    /// il contient `role`, `assignedArtistId`, `email`, …). L'appel `exists()`
+    /// n'est pas soumis aux règles de lecture : il sonde la collection sans
+    /// autorisation. La gestion des comptes se fait depuis la console Firebase.
+    function isAdmin() {
+      return request.auth != null
+          && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+
+    // Compte autorisé à publier (alias conservé pour la lisibilité des
+    // règles ci-dessous) : exige désormais la présence dans `admin_users`.
     function isValidAdmin() {
-      return request.auth != null;
+      return isAdmin();
     }
 
     /// Événement conforme au schéma attendu par l'application mobile.
