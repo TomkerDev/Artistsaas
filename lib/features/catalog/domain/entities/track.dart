@@ -37,6 +37,7 @@ class Track {
     this.audioUrl,
     this.label,
     this.artistId,
+    this.createdAt,
     this.isDownloadable = true,
     this.isNew = false,
     this.isDownloaded = false,
@@ -84,6 +85,8 @@ class Track {
       label: _optionalText(json, 'label'),
       artistId:
           _optionalText(json, 'artistId') ?? _optionalText(json, 'artist_id'),
+      createdAt:
+          _firstDateTime(json, const <String>['created_at', 'createdAt']),
       isDownloadable: _optionalBool(json, 'is_downloadable') ?? true,
       isNew: _optionalBool(json, 'is_new') ?? false,
       isDownloaded: _optionalBool(json, 'is_downloaded') ?? false,
@@ -135,6 +138,15 @@ class Track {
   /// distinguer « Sec Sec » de Jethsonat d'un titre de démonstration.
   final String? artistId;
 
+  /// Horodatage de création du document, utilisé pour ordonner les nouveautés
+  /// distantes (les plus récentes en tête).
+  ///
+  /// Normalisé côté `data/` en millisecondes depuis l'epoch : les documents
+  /// Firestore exposent un `Timestamp` (`created_at` / `createdAt`), que la
+  /// source distante convertit avant d'appeler [Track.fromJson]. `null` pour
+  /// les pistes du catalogue embarqué, qui ne portent pas cette information.
+  final DateTime? createdAt;
+
   /// Indique si l'application autorise la matérialisation locale du morceau.
   final bool isDownloadable;
 
@@ -162,6 +174,7 @@ class Track {
         if (coverUrl != null) 'cover_url': coverUrl,
         if (label != null) 'label': label,
         if (artistId != null) 'artistId': artistId,
+        if (createdAt != null) 'created_at': createdAt!.millisecondsSinceEpoch,
         'is_downloadable': isDownloadable,
         'is_new': isNew,
         'is_downloaded': isDownloaded,
@@ -182,6 +195,7 @@ class Track {
     Uri? audioUrl,
     String? label,
     String? artistId,
+    DateTime? createdAt,
     bool? isDownloadable,
     bool? isNew,
     bool? isDownloaded,
@@ -200,6 +214,7 @@ class Track {
       audioUrl: audioUrl ?? this.audioUrl,
       label: label ?? this.label,
       artistId: artistId ?? this.artistId,
+      createdAt: createdAt ?? this.createdAt,
       isDownloadable: isDownloadable ?? this.isDownloadable,
       isNew: isNew ?? this.isNew,
       isDownloaded: isDownloaded ?? this.isDownloaded,
@@ -222,6 +237,7 @@ class Track {
         other.audioUrl == audioUrl &&
         other.label == label &&
         other.artistId == artistId &&
+        other.createdAt == createdAt &&
         other.isDownloadable == isDownloadable &&
         other.isNew == isNew &&
         other.isDownloaded == isDownloaded;
@@ -242,6 +258,7 @@ class Track {
         audioUrl,
         label,
         artistId,
+        createdAt,
         isDownloadable,
         isNew,
         isDownloaded,
@@ -332,5 +349,39 @@ class Track {
       );
     }
     return uri;
+  }
+
+  /// Première date exploitable parmi [keys], dans l'ordre fourni.
+  ///
+  /// La source distante normalise déjà le `Timestamp` Firestore en
+  /// millisecondes ; on accepte néanmoins ici un nombre direct (millisecondes
+  /// depuis l'epoch) ou une chaîne ISO, afin que [Track.fromJson] reste
+  /// utilisable sur des données brutes. Une valeur illisible est ignorée
+  /// (`null`) plutôt que rejetée : l'horodatage ne sert qu'au tri.
+  static DateTime? _firstDateTime(
+      Map<String, dynamic> json, List<String> keys) {
+    for (final String key in keys) {
+      final Object? value = json[key];
+      if (value == null) {
+        continue;
+      }
+      if (value is num) {
+        return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      }
+      if (value is DateTime) {
+        return value;
+      }
+      if (value is String) {
+        final int? asMillis = int.tryParse(value);
+        if (asMillis != null) {
+          return DateTime.fromMillisecondsSinceEpoch(asMillis);
+        }
+        final DateTime? parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return null;
   }
 }

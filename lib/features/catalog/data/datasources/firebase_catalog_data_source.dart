@@ -22,8 +22,9 @@ class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
   ///
   /// Pour une application « 100 % audio », Firestore est la source *unique* :
   /// la limite doit donc couvrir l'intégralité du catalogue, et pas seulement
-  /// les dernières nouveautés. 500 reste sous le plafond d'une requête simple
-  /// (index automatique sur `artistId`, sans coût d'index composé).
+  /// les dernières nouveautés. 500 couvre largement un catalogue tout en
+  /// restant raisonnable ; la requête s'appuie sur l'index composite
+  /// `artistId ASC / createdAt DESC` (voir `firestore.indexes.json`).
   final int limit;
 
   final FirebaseFirestore? _firestore;
@@ -36,9 +37,20 @@ class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
   @override
   Future<List<Track>> fetchNewTracks(String artistId) async {
     try {
+      // Le tri est délégué à Firestore (`orderBy('createdAt')`) afin que les
+      // nouveautés fraîchement publiées par le panneau Web remontent en tête
+      // de liste. L'index composite `artistId ASC / createdAt DESC` déclaré
+      // dans `firestore.indexes.json` rend cette requête serveur possible ;
+      // sans `orderBy`, Firestore renvoyait les documents dans un ordre
+      // arbitraire et le nouveau morceau « Test » se retrouvait noyé en fin
+      // de liste. Le filtre `artistId` est conservé : l'application est
+      // cloisonnée par artiste (une build par artiste), et l'`artistId`
+      // enregistré par l'admin doit correspondre au `--dart-define=ARTIST_ID`
+      // du build mobile.
       final QuerySnapshot<Map<String, dynamic>> snapshot = await _db
           .collection(collection)
           .where('artistId', isEqualTo: artistId)
+          .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
 
@@ -48,8 +60,10 @@ class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
           _toTrack(doc),
       ];
 
-      // Les documents Firestore n'imposent pas d'ordre : on trie côté client
-      // sur `created_at` lorsqu'il est fourni, les plus récents d'abord.
+      // Filet de sécurité côté client : Firestore ordonne déjà par `createdAt`
+      // décroissant, mais on conserve un tri local stable au cas où certains
+      // documents seraient dépourvus d'horodatage (ils passent alors en fin de
+      // liste, comme avant).
       tracks.sort(_mostRecentFirst);
       return List<Track>.unmodifiable(tracks);
     } on CatalogException {
@@ -67,18 +81,54 @@ class FirebaseCatalogDataSource implements RemoteCatalogDataSource {
   /// Le document peut porter un `id` explicite ; à défaut, l'identifiant du
   /// document fait foi. Les nouveautés distantes sont marquées `isNew` par
   /// défaut : c'est leur raison d'être dans ce flux.
+  ///
+  /// Le `Timestamp` Firestore (`created_at` / `createdAt`) est normalisé en
+  /// millisecondes depuis l'epoch avant d'alimenter [Track.fromJson], afin que
+  /// l'entité de domaine dépende d'un type Dart standard et non de
+  /// `cloud_firestore`.
   Track _toTrack(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     final Map<String, dynamic> json = <String, dynamic>{...doc.data()};
     json['id'] = (json['id'] as String?)?.trim().isNotEmpty == true
         ? json['id']
         : doc.id;
     json['is_new'] = json['is_new'] ?? true;
+    json['created_at'] =
+        _normalizeTimestamp(json['created_at'] ?? json['createdAt']);
     return Track.fromJson(json);
   }
 
+  /// Convertit une valeur d'horodatage Firestore en millisecondes epoch.
+  ///
+  /// Accepte un `Timestamp` Firestore (champ `created_at` / `createdAt` écrit
+  /// côté serveur) ou un nombre déjà exprimé en millisecondes. Renvoie `null`
+  /// si la valeur est absente ou d'un type inattendu : le tri se contentera
+  /// alors de replacer la piste en fin de liste.
+  static int? _normalizeTimestamp(Object? value) {
+    if (value is Timestamp) {
+      return value.millisecondsSinceEpoch;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return null;
+  }
+
   static int _mostRecentFirst(Track a, Track b) {
-    // Tri stable sur `release_year` faute d'horodatage normalisé dans le
-    // domaine ; les pistes sans année passent en fin de liste.
+    // Tri par date de création décroissante ; les pistes sans horodatage
+    // (catalogue embarqué) conservent un repli stable sur `release_year`,
+    // puis passent en fin de liste.
+    final DateTime? dateA = a.createdAt;
+    final DateTime? dateB = b.createdAt;
+    if (dateA != null && dateB != null) {
+      final int byDate = dateB.compareTo(dateA);
+      if (byDate != 0) {
+        return byDate;
+      }
+    } else if (dateA != null) {
+      return -1;
+    } else if (dateB != null) {
+      return 1;
+    }
     final int yearA = a.releaseYear ?? 0;
     final int yearB = b.releaseYear ?? 0;
     return yearB.compareTo(yearA);

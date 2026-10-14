@@ -32,6 +32,47 @@ void main() {
       expect(track.coverUrl, 'https://bucket.supabase.co/jethsonat/cover.png');
     });
 
+    test('lit la date de création (created_at en millisecondes)', () {
+      final Track track = Track.fromJson(<String, dynamic>{
+        'id': 'jethsonat-test',
+        'title': 'Test',
+        'artist': 'Jethsonat',
+        'artistId': 'jethsonat',
+        'duration_ms': 200000,
+        'audioUrl': 'https://bucket.supabase.co/jethsonat/test.mp3',
+        'created_at': 1767225600000,
+      });
+
+      expect(
+        track.createdAt,
+        DateTime.fromMillisecondsSinceEpoch(1767225600000),
+      );
+    });
+
+    test('accepte createdAt en camelCase et laisse null si absent', () {
+      final Track withCamel = Track.fromJson(<String, dynamic>{
+        'id': 'a',
+        'title': 'A',
+        'artist': 'Jethsonat',
+        'duration_ms': 1000,
+        'audioUrl': 'https://bucket.supabase.co/a.mp3',
+        'createdAt': 1767225600000,
+      });
+      expect(
+        withCamel.createdAt,
+        DateTime.fromMillisecondsSinceEpoch(1767225600000),
+      );
+
+      final Track without = Track.fromJson(<String, dynamic>{
+        'id': 'b',
+        'title': 'B',
+        'artist': 'Jethsonat',
+        'duration_ms': 1000,
+        'audioUrl': 'https://bucket.supabase.co/b.mp3',
+      });
+      expect(without.createdAt, isNull);
+    });
+
     test('accepte aussi la convention snake_case historique', () {
       final Track track = Track.fromJson(<String, dynamic>{
         'id': 'ancien',
