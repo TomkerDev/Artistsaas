@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../core/constants/artist_config.dart';
@@ -7,8 +6,11 @@ import '../core/errors/firestore_error_message.dart';
 import '../features/store/data/store_admin_service.dart';
 import '../features/store/data/store_repository.dart';
 import '../features/store/domain/store_models.dart';
+import 'admin_dashboard_page.dart';
+import 'admin_edit_dialogs.dart';
 import 'admin_identity.dart';
 import 'admin_routes.dart';
+import 'admin_settings_page.dart';
 import 'admin_upload_page.dart';
 
 class AdminShell extends StatefulWidget {
@@ -61,244 +63,19 @@ class _AdminShellState extends State<AdminShell> {
               child: IndexedStack(
                 index: _index,
                 children: <Widget>[
-                  const _DashboardView(),
+                  AdminDashboard(
+                    onNavigate: (int value) => setState(() => _index = value),
+                  ),
                   const AdminUploadPage(),
                   const StoreAdminPage(),
                   const _ProfileView(),
-                  const _SettingsView(),
+                  const SettingsScreen(),
                 ],
               ),
             ),
           ],
         ),
       );
-}
-
-/// Tableau de bord : statistiques de catalogue et d'écoute par artiste.
-///
-/// Les compteurs sont lus en direct depuis Firestore. Un champ de lecture
-/// absent n'est pas une erreur : la carte affiche « — » plutôt que « 0 ».
-class _DashboardView extends StatefulWidget {
-  const _DashboardView();
-
-  @override
-  State<_DashboardView> createState() => _DashboardViewState();
-}
-
-class _DashboardViewState extends State<_DashboardView> {
-  /// Artiste filtré ; `null` = tous les artistes.
-  String? _artistId;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        actions: <Widget>[
-          if (FirebaseAuth.instance.currentUser != null)
-            IconButton(
-              tooltip: 'Déconnexion',
-              icon: const Icon(Icons.logout),
-              onPressed: () => FirebaseAuth.instance.signOut(),
-            ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: <Widget>[
-                for (final AdminArtistOption option in adminArtistOptions)
-                  ChoiceChip(
-                    label: Text(option.name),
-                    selected: _artistId == option.id,
-                    onSelected: (bool selected) => setState(
-                      () => _artistId = selected ? option.id : null,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Expanded(child: _DashboardStats(artistId: _artistId)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Agrégats de catalogue et d'écoute pour le filtre artiste choisi.
-class _DashboardStats extends StatelessWidget {
-  const _DashboardStats({required this.artistId});
-
-  /// Filtre appliqué ; `null` agrège tous les artistes.
-  final String? artistId;
-
-  /// Flux Firestore correspondant au filtre.
-  ///
-  /// Sans filtre, la collection est lue telle quelle ; avec un filtre, la
-  /// requête reste sur le seul champ `artistId` (index simple), afin de ne pas
-  /// dépendre d'un index composite.
-  Stream<QuerySnapshot<Map<String, dynamic>>> _stream() {
-    final CollectionReference<Map<String, dynamic>> tracks =
-        FirebaseFirestore.instance.collection('tracks');
-    if (artistId == null) {
-      return tracks.snapshots();
-    }
-    return tracks.where('artistId', isEqualTo: artistId).snapshots();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: _stream(),
-      builder: (
-        BuildContext context,
-        AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
-      ) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: _FirestoreStreamError(error: snapshot.error));
-        }
-        if (!snapshot.hasData) {
-          return const Center(child: Text('Statistiques indisponibles.'));
-        }
-
-        final _Stats stats = _Stats.from(snapshot.data!.docs, artistId);
-
-        return ListView(
-          children: <Widget>[
-            _StatTile(
-              icon: Icons.library_music,
-              title: 'Morceaux publiés',
-              value: '${stats.tracks}',
-            ),
-            _StatTile(
-              icon: Icons.album,
-              title: 'Albums & Singles',
-              value: '${stats.albums}',
-            ),
-            _StatTile(
-              icon: Icons.record_voice_over,
-              title: 'Écoutes cumulées',
-              value: stats.plays == null ? '—' : '${stats.plays}',
-            ),
-            _StatTile(
-              icon: Icons.audio_file,
-              title: 'Fichiers audio',
-              value: '${stats.files}',
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// Agrégats de catalogue et d'écoute, calculés côté client.
-final class _Stats {
-  const _Stats({
-    required this.tracks,
-    required this.albums,
-    required this.files,
-    required this.plays,
-  });
-
-  /// Nombre de morceaux publiés.
-  final int tracks;
-
-  /// Nombre d'albums/singles distincts.
-  final int albums;
-
-  /// Nombre de documents porteurs d'une URL audio.
-  final int files;
-
-  /// Total des écoutes ; `null` si aucun champ de comptage n'est renseigné.
-  final int? plays;
-
-  factory _Stats.from(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    String? artistId,
-  ) {
-    final Set<String> albums = <String>{};
-    int tracks = 0;
-    int files = 0;
-    int plays = 0;
-    bool playsKnown = false;
-
-    for (final QueryDocumentSnapshot<Map<String, dynamic>> doc in docs) {
-      final Map<String, dynamic> data = doc.data();
-
-      // Sans filtre, les documents reçus sont déjà ceux de tous les artistes.
-      if (artistId != null && data['artistId'] != artistId) {
-        continue;
-      }
-      tracks++;
-
-      final String? album = data['album'] as String?;
-      albums.add(
-        album != null && album.trim().isNotEmpty ? album.trim() : 'Single',
-      );
-
-      // `audioUrl` (schéma courant) et `audio_url` (documents historiques).
-      final Object? audioUrl = data['audioUrl'] ?? data['audio_url'];
-      if (audioUrl is String && audioUrl.isNotEmpty) {
-        files++;
-      }
-
-      final Object? count = data['plays'] ?? data['play_count'];
-      if (count is num) {
-        plays += count.toInt();
-        playsKnown = true;
-      }
-    }
-
-    return _Stats(
-      tracks: tracks,
-      albums: albums.length,
-      files: files,
-      plays: playsKnown ? plays : null,
-    );
-  }
-}
-
-/// Ligne de statistique du tableau de bord.
-class _StatTile extends StatelessWidget {
-  const _StatTile({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String title;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(icon, color: theme.colorScheme.primary),
-        title: Text(title),
-        trailing: Text(
-          value,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            color: theme.colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Édition de la fiche artiste (biographie, label, distinction).
@@ -456,35 +233,6 @@ class _ProfileViewState extends State<_ProfileView> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Text('Enregistrer le profil'),
-            ),
-          ],
-        ),
-      );
-}
-
-class _SettingsView extends StatelessWidget {
-  const _SettingsView();
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Paramètres')),
-        body: ListView(
-          padding: const EdgeInsets.all(24),
-          children: <Widget>[
-            const ListTile(
-              leading: Icon(Icons.shield_outlined),
-              title: Text('Rôles utilisateurs'),
-              subtitle: Text(
-                'Gérez les rôles artist et agency_admin dans Firestore.',
-              ),
-              trailing: Icon(Icons.chevron_right),
-            ),
-            const ListTile(
-              leading: Icon(Icons.cloud_outlined),
-              title: Text('Configuration Firestore / Supabase'),
-              subtitle: Text(
-                'Les paramètres sont fournis au build via dart-define.',
-              ),
-              trailing: Icon(Icons.chevron_right),
             ),
           ],
         ),
@@ -673,6 +421,7 @@ class _EventFormState extends State<_EventForm> {
                   StoreAdminService(FirebaseFirestore.instance).deleteEvent(
                     event.id,
                   ),
+              onEdit: _editEvent,
             ),
             const Divider(height: 32),
             const Text(
@@ -747,6 +496,30 @@ class _EventFormState extends State<_EventForm> {
         ),
       );
 
+  /// Ouvre le dialogue d'édition puis applique la mise à jour Firestore.
+  ///
+  /// Le `StreamBuilder` de la liste publiée se rafraîchit tout seul : le
+  /// concert modifié réapparaît immédiatement, sans rechargement manuel.
+  Future<void> _editEvent(ShowEvent event) async {
+    final EventEditResult? result = await showDialog<EventEditResult>(
+      context: context,
+      builder: (BuildContext dialogContext) => EventEditDialog(event: event),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    try {
+      await StoreAdminService(
+        FirebaseFirestore.instance,
+      ).applyEventEdit(result);
+      _toast('Concert mis à jour.');
+    } on StateError catch (error) {
+      _toast(error.message);
+    } on FirebaseException catch (error) {
+      _toast('Mise à jour refusée : ${error.message}');
+    }
+  }
+
   static String? _required(String? value) =>
       (value == null || value.trim().isEmpty) ? 'Champ obligatoire' : null;
 
@@ -786,6 +559,7 @@ class _PublishedList<T> extends StatelessWidget {
     required this.stream,
     required this.describe,
     required this.onDelete,
+    this.onEdit,
   });
 
   final String title;
@@ -793,6 +567,11 @@ class _PublishedList<T> extends StatelessWidget {
   final Stream<List<T>>? stream;
   final String Function(T item) describe;
   final Future<void> Function(T item) onDelete;
+
+  /// Ouvre le formulaire d'édition pré-rempli pour [item].
+  ///
+  /// Optionnel : sans callback, seule la suppression reste disponible.
+  final Future<void> Function(T item)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -841,11 +620,22 @@ class _PublishedList<T> extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(describe(item)),
-                    trailing: IconButton(
-                      tooltip: 'Supprimer',
-                      icon: const Icon(Icons.delete_outline),
-                      color: Theme.of(context).colorScheme.error,
-                      onPressed: () => _confirmDelete(context, item),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        if (onEdit != null)
+                          IconButton(
+                            tooltip: 'Modifier',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () => onEdit!(item),
+                          ),
+                        IconButton(
+                          tooltip: 'Supprimer',
+                          icon: const Icon(Icons.delete_outline),
+                          color: Theme.of(context).colorScheme.error,
+                          onPressed: () => _confirmDelete(context, item),
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -1091,6 +881,7 @@ class _MerchFormState extends State<_MerchForm> {
                   StoreAdminService(FirebaseFirestore.instance).deleteMerch(
                     product.id,
                   ),
+              onEdit: _editMerch,
             ),
             const Divider(height: 32),
             const Text(
@@ -1150,6 +941,30 @@ class _MerchFormState extends State<_MerchForm> {
         ),
       );
 
+  /// Ouvre le dialogue d'édition puis applique la mise à jour Firestore.
+  ///
+  /// Voir [_EventFormState._editEvent] : la liste se rafraîchit via son flux.
+  Future<void> _editMerch(MerchProduct product) async {
+    final MerchEditResult? result = await showDialog<MerchEditResult>(
+      context: context,
+      builder: (BuildContext dialogContext) =>
+          MerchEditDialog(product: product),
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+    try {
+      await StoreAdminService(
+        FirebaseFirestore.instance,
+      ).applyMerchEdit(result);
+      _toast('Article mis à jour.');
+    } on StateError catch (error) {
+      _toast(error.message);
+    } on FirebaseException catch (error) {
+      _toast('Mise à jour refusée : ${error.message}');
+    }
+  }
+
   static String? _required(String? value) =>
       (value == null || value.trim().isEmpty) ? 'Champ obligatoire' : null;
 
@@ -1176,43 +991,111 @@ class _MerchFormState extends State<_MerchForm> {
 class _TicketList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('tickets')
           .orderBy('status')
           .snapshots(),
-      builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
+      builder: (
+        BuildContext context,
+        AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+      ) {
         if (snapshot.hasError) {
-          return Center(child: _FirestoreStreamError(error: snapshot.error));
+          return Center(
+            child: _FirestoreStreamError(error: snapshot.error),
+          );
         }
         if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+        final List<StoreTicket> tickets = <StoreTicket>[
+          for (final QueryDocumentSnapshot<Map<String, dynamic>> doc
+              in snapshot.data!.docs)
+            StoreTicket.fromFirestore(doc),
+        ];
         return ListView.builder(
-          itemCount: snapshot.data!.docs.length,
+          itemCount: tickets.length,
           itemBuilder: (BuildContext context, int index) {
-            final QueryDocumentSnapshot<DocumentSnapshot> doc = snapshot
-                .data!.docs[index] as QueryDocumentSnapshot<DocumentSnapshot>;
-            final Map<String, dynamic> data =
-                doc.data() as Map<String, dynamic>;
-            final bool confirmed = data['status'] == 'confirmed';
+            final StoreTicket ticket = tickets[index];
             return ListTile(
-              title: Text(data['event_id'] as String? ?? ''),
-              subtitle: Text('${data['ticket_type']} · ${data['status']}'),
-              trailing: confirmed
-                  ? const Icon(Icons.check_circle, color: Colors.green)
-                  : IconButton(
-                      icon: const Icon(Icons.verified),
+              title: Text(ticket.eventId),
+              subtitle: Text('${ticket.ticketType} · ${ticket.status}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: 'Modifier',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _editTicket(context, ticket),
+                  ),
+                  if (!ticket.isConfirmed)
+                    IconButton(
                       tooltip: 'Valider le paiement',
-                      onPressed: () => doc.reference.update(<String, Object?>{
-                        'status': 'confirmed',
-                      }),
-                    ),
+                      icon: const Icon(Icons.verified),
+                      onPressed: () => _confirmTicket(context, ticket.id),
+                    )
+                  else
+                    const Icon(Icons.check_circle, color: Colors.green),
+                ],
+              ),
             );
           },
         );
       },
     );
+  }
+
+  /// Confirme un billet (statut `confirmed`).
+  Future<void> _confirmTicket(BuildContext context, String id) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('tickets')
+          .doc(id)
+          .update(<String, Object?>{'status': StoreTicket.statusConfirmed});
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Billet confirmé.')),
+      );
+    } on FirebaseException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Mise à jour refusée : ${error.message}')),
+      );
+    }
+  }
+
+  /// Ouvre le dialogue d'édition (type / statut) puis applique la mise à jour.
+  Future<void> _editTicket(BuildContext context, StoreTicket ticket) async {
+    final TicketEditResult? result = await showDialog<TicketEditResult>(
+      context: context,
+      builder: (BuildContext dialogContext) =>
+          TicketEditDialog(ticket: ticket),
+    );
+    if (result == null || !context.mounted) {
+      return;
+    }
+    try {
+      await StoreAdminService(
+        FirebaseFirestore.instance,
+      ).applyTicketEdit(result);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Billet mis à jour.')),
+      );
+    } on FirebaseException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Mise à jour refusée : ${error.message}')),
+      );
+    }
   }
 }
 
