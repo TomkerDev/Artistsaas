@@ -52,10 +52,30 @@ class LocalDownloadRepository implements DownloadRepository {
     final String databasesPath = await getDatabasesPath();
     return openDatabase(
       '$databasesPath/artistsaas.db',
-      version: 1,
+      version: 2,
       onCreate: (Database db, int version) async {
         await db.execute(
-          'CREATE TABLE downloaded_tracks ('
+          'CREATE TABLE IF NOT EXISTS favorites ('
+          'track_id TEXT PRIMARY KEY, '
+          'added_at TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE IF NOT EXISTS downloaded_tracks ('
+          'id TEXT PRIMARY KEY, '
+          'track_json TEXT NOT NULL, '
+          'local_path TEXT NOT NULL, '
+          'file_size INTEGER NOT NULL, '
+          'downloaded_at INTEGER NOT NULL)',
+        );
+      },
+      onUpgrade: (Database db, int oldVersion, int newVersion) async {
+        await db.execute(
+          'CREATE TABLE IF NOT EXISTS favorites ('
+          'track_id TEXT PRIMARY KEY, '
+          'added_at TEXT NOT NULL)',
+        );
+        await db.execute(
+          'CREATE TABLE IF NOT EXISTS downloaded_tracks ('
           'id TEXT PRIMARY KEY, '
           'track_json TEXT NOT NULL, '
           'local_path TEXT NOT NULL, '

@@ -98,7 +98,7 @@ final Provider<PlaybackSourceResolver> playbackSourceResolverProvider =
 final Provider<FavoriteRepository> favoriteRepositoryProvider =
     Provider<FavoriteRepository>((Ref ref) {
       final LocalFavoriteRepository repository = LocalFavoriteRepository();
-      ref.onDispose(repository.reset);
+      ref.onDispose(repository.dispose);
       return repository;
     });
 
