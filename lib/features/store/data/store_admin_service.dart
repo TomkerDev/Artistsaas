@@ -115,6 +115,86 @@ class StoreAdminService {
     return doc.id;
   }
 
+  /// Mettre à jour un événement existant.
+  ///
+  /// Ne réécrit que les champs métier saisis ; `artistId` et `seats_sold` sont
+  /// préservés (le nombre de places vendues ne doit pas repartir de zéro lors
+  /// d'une simple correction de prix ou de lieu).
+  Future<void> updateEvent({
+    required String id,
+    required String title,
+    required DateTime date,
+    required String dateLabel,
+    required String location,
+    required double priceStd,
+    required double priceVip,
+    required String mobileMoneyNumber,
+    required int totalSeats,
+  }) async {
+    if (title.trim().isEmpty ||
+        location.trim().isEmpty ||
+        mobileMoneyNumber.trim().isEmpty) {
+      throw StateError(validationMessage);
+    }
+    if (priceStd <= 0 || priceVip <= 0) {
+      throw StateError('Les prix standard et VIP doivent être positifs.');
+    }
+    if (totalSeats <= 0) {
+      throw StateError('Le nombre de places doit être supérieur à zéro.');
+    }
+
+    await _firestore.collection('events').doc(id).update(<String, Object?>{
+      'title': title.trim(),
+      'date': Timestamp.fromDate(date),
+      'date_label': dateLabel.trim(),
+      'location': location.trim(),
+      'price_std': priceStd,
+      'price_vip': priceVip,
+      'mobile_money_number': mobileMoneyNumber.trim(),
+      'total_seats': totalSeats,
+    });
+  }
+
+  /// Mettre à jour un article de merchandising existant.
+  ///
+  /// [imageUrl] vide conserve l'absence d'image ; `artistId` est inchangé.
+  Future<void> updateMerch({
+    required String id,
+    required String name,
+    required double priceFcfa,
+    required String whatsappContact,
+    String description = '',
+    String imageUrl = '',
+    List<String> sizes = const <String>[],
+  }) async {
+    if (name.trim().isEmpty || whatsappContact.trim().isEmpty) {
+      throw StateError(
+        'Le nom de l\'article et le contact WhatsApp sont obligatoires.',
+      );
+    }
+    if (priceFcfa <= 0) {
+      throw StateError('Le prix doit être supérieur à zéro.');
+    }
+    if (imageUrl.trim().isNotEmpty &&
+        !RegExp(r'^https?://').hasMatch(imageUrl.trim())) {
+      throw StateError(
+        'L\'URL de l\'image doit commencer par http:// ou https://',
+      );
+    }
+
+    await _firestore.collection('merch').doc(id).update(<String, Object?>{
+      'name': name.trim(),
+      'description': description.trim(),
+      'price_fcfa': priceFcfa,
+      'image_url': imageUrl.trim(),
+      'sizes': <String>[
+        for (final String size in sizes)
+          if (size.trim().isNotEmpty) size.trim(),
+      ],
+      'whatsapp_contact': whatsappContact.trim(),
+    });
+  }
+
   /// Supprimer un événement.
   Future<void> deleteEvent(String id) =>
       _firestore.collection('events').doc(id).delete();
