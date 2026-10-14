@@ -203,11 +203,16 @@ class JustAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> skipToNext() async {
-    if (!_state.hasNext) {
-      return;
-    }
     try {
-      await _player.seekToNext();
+      if (_state.hasNext) {
+        await _player.seekToNext();
+        return;
+      }
+      // En boucle « toute la file », le bouton Suivant reboucle sur le
+      // premier morceau au lieu de rester inerte en fin de file.
+      if (_state.loopMode == LoopMode.all && _state.queue.isNotEmpty) {
+        await _player.seek(Duration.zero, index: 0);
+      }
     } on Object catch (error) {
       _publish(
         _state.copyWith(errorMessage: 'Le morceau suivant a échoué : $error'),
@@ -217,14 +222,21 @@ class JustAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> skipToPrevious() async {
-    if (!_state.hasPrevious) {
-      return;
-    }
     try {
-      await _player.seekToPrevious();
+      if (_state.hasPrevious) {
+        await _player.seekToPrevious();
+        return;
+      }
+      // Symétrique : en boucle « toute la file », le bouton Précédent
+      // reboucle sur le dernier morceau en début de file.
+      if (_state.loopMode == LoopMode.all && _state.queue.isNotEmpty) {
+        await _player.seek(Duration.zero, index: _state.queue.length - 1);
+      }
     } on Object catch (error) {
       _publish(
-        _state.copyWith(errorMessage: 'Le morceau précédent a échoué : $error'),
+        _state.copyWith(
+          errorMessage: 'Le morceau précédent a échoué : $error',
+        ),
       );
     }
   }
@@ -274,6 +286,12 @@ class JustAudioPlayerService implements AudioPlayerService {
   Future<void> setShuffleModeEnabled(bool enabled) async {
     try {
       await _player.setShuffleModeEnabled(enabled);
+      if (enabled) {
+        // Activer le drapeau ne suffit pas : `just_audio` ne mélange
+        // l'ordre effectif que sur appel explicite à `shuffle()`. Sans
+        // lui, l'icône s'allume mais la lecture reste séquentielle.
+        await _player.shuffle();
+      }
       // Même raison que [setLoopMode] : le mode aléatoire doit figurer dans
       // TOUTES les émissions du moteur, sinon l'icône de l'écran Lecteur
       // clignote puis revient en « off » au tick suivant.

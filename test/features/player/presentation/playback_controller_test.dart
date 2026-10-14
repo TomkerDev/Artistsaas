@@ -136,6 +136,29 @@ void main() {
       expect(service.lastInitialIndex, 1);
     });
 
+    test('en boucle toute la file, next reboucle en fin de file', () async {
+      final PlaybackController controller = container.read(
+        playbackControllerProvider.notifier,
+      );
+
+      await controller.playCatalog(
+        <Track>[buildTrack(id: 'a'), buildTrack(id: 'b')],
+      );
+      await pumpEventQueue();
+
+      await controller.setLoopMode(LoopMode.all);
+      await controller.playAt(1);
+      await pumpEventQueue();
+
+      await controller.next();
+      await pumpEventQueue();
+
+      expect(
+        container.read(playbackControllerProvider).currentMedia?.trackId,
+        'a',
+      );
+    });
+
     test('shuffle et boucle survivent aux émissions suivantes du moteur',
         () async {
       final PlaybackController controller = container.read(

@@ -281,9 +281,11 @@ final class FakeAudioPlayerService implements AudioPlayerService {
       throw failure;
     }
     emit(
-      PlaybackState(
+      _state.copyWith(
         queue: List<PlaybackMedia>.unmodifiable(queue),
         currentIndex: initialIndex,
+        position: Duration.zero,
+        duration: Duration.zero,
       ),
     );
   }
@@ -307,28 +309,39 @@ final class FakeAudioPlayerService implements AudioPlayerService {
 
   @override
   Future<void> skipToNext() async {
-    if (!_state.hasNext) {
+    if (_state.hasNext) {
+      emit(
+        _state.copyWith(
+          currentIndex: _state.currentIndex! + 1,
+          position: Duration.zero,
+        ),
+      );
       return;
     }
-    emit(
-      _state.copyWith(
-        currentIndex: _state.currentIndex! + 1,
-        position: Duration.zero,
-      ),
-    );
+    if (_state.loopMode == LoopMode.all && _state.queue.isNotEmpty) {
+      emit(_state.copyWith(currentIndex: 0, position: Duration.zero));
+    }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    if (!_state.hasPrevious) {
+    if (_state.hasPrevious) {
+      emit(
+        _state.copyWith(
+          currentIndex: _state.currentIndex! - 1,
+          position: Duration.zero,
+        ),
+      );
       return;
     }
-    emit(
-      _state.copyWith(
-        currentIndex: _state.currentIndex! - 1,
-        position: Duration.zero,
-      ),
-    );
+    if (_state.loopMode == LoopMode.all && _state.queue.isNotEmpty) {
+      emit(
+        _state.copyWith(
+          currentIndex: _state.queue.length - 1,
+          position: Duration.zero,
+        ),
+      );
+    }
   }
 
   @override
