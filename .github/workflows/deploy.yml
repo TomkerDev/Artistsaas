@@ -139,3 +139,20 @@ jobs:
         run: |
           echo "Deploiement termine -> https://${{ env.FIREBASE_PROJECT_ID }}.web.app"
           echo "Deploiement termine -> https://${{ env.FIREBASE_PROJECT_ID }}.firebaseapp.com"
+
+      # Déploiement des règles + index Firestore.
+      #
+      # L'action `action-hosting-deploy` ci-dessus ne publie QUE le Hosting :
+      # sans cette étape, `firestore.rules` / `firestore.indexes.json` du repo
+      # ne seraient jamais appliqués au projet (l'édition admin échouerait en
+      # `permission-denied`). On réutilise le même secret de compte de service
+      # `FIREBASE_SERVICE_ACCOUNT` que le déploiement Hosting.
+      - name: Deploy Firestore rules & indexes
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          npm install -g firebase-tools
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+          firebase deploy --only firestore:rules,firestore:indexes --project "$FIREBASE_PROJECT_ID" --non-interactive
+          rm -f /tmp/firebase-sa.json
