@@ -10,6 +10,7 @@ import '../../core/constants/app_strings.dart';
 import '../../services/supabase_storage_service.dart';
 import 'admin_identity.dart';
 import 'admin_routes.dart';
+import 'admin_track_edit.dart';
 
 /// Panneau de publication multi-artistes (Flutter Web).
 ///
@@ -490,19 +491,19 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     _coverFileName = null;
   }
 
-  Future<void> _deleteTrack(String trackId) async {
-    final confirmed = await showDialog<bool>(
+  Future<void> _deleteTrack(String docId) async {
+    final bool? confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (BuildContext dialogContext) => AlertDialog(
         title: const Text(AppStrings.deleteConfirmTitle),
         content: const Text(AppStrings.deleteFirestoreTrackMessage),
-        actions: [
+        actions: <Widget>[
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text(AppStrings.cancelAction),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text(AppStrings.deleteAction),
           ),
         ],
@@ -510,26 +511,60 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
     );
     if (confirmed != true) return;
     try {
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('tracks')
-          .where('artistId', isEqualTo: _selectedArtistId)
-          .where('title', isEqualTo: trackId)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isEmpty) return;
-      await snapshot.docs.first.reference.delete();
-      if (mounted) {
-        final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-        if (mounted) {
-          messenger.showSnackBar(
-            const SnackBar(content: Text('Morceau supprimé.')),
-          );
-        }
-      }
-    } catch (error) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Échec de la suppression : $error');
-      }
+          .doc(docId)
+          .delete();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Morceau supprimé.')));
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Suppression refusée : ${error.message}')),
+      );
+    }
+  }
+
+  Future<void> _editTrack({
+    required String docId,
+    required String title,
+    required String album,
+    required String coverUrl,
+    required String audioUrl,
+  }) async {
+    final TrackEditResult? result = await showDialog<TrackEditResult>(
+      context: context,
+      builder: (BuildContext dialogContext) => TrackEditDialog(
+        docId: docId,
+        title: title,
+        album: album,
+        coverUrl: coverUrl,
+        audioUrl: audioUrl,
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      await FirebaseFirestore.instance
+          .collection('tracks')
+          .doc(result.id)
+          .update(<String, Object?>{
+            'title': result.title,
+            'album': result.album,
+            'imageUrl': result.coverUrl,
+            'cover_url': result.coverUrl,
+            'updated_at': FieldValue.serverTimestamp(),
+          });
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Morceau mis à jour.')));
+    } on FirebaseException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Mise à jour refusée : ${error.message}')),
+      );
     }
   }
 
@@ -797,7 +832,10 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                                                       Map<String, dynamic>>
                                                   doc,
                                             ) =>
-                                                doc.data(),
+                                                <String, dynamic>{
+                                              ...doc.data(),
+                                              'docId': doc.id,
+                                            },
                                           )
                                           .toList(growable: false) ??
                                       const <Map<String, dynamic>>[];
@@ -805,6 +843,7 @@ class _AdminUploadPageState extends ConsumerState<AdminUploadPage> {
                                 tracks: tracks,
                                 artistId: _effectiveArtistId,
                                 onDelete: _deleteTrack,
+                                onEdit: _editTrack,
                               );
                             },
                           ),
@@ -1165,11 +1204,22 @@ class _TrackList extends StatelessWidget {
     required this.tracks,
     required this.artistId,
     required this.onDelete,
+    required this.onEdit,
   });
 
   final List<Map<String, dynamic>> tracks;
   final String artistId;
   final Future<void> Function(String) onDelete;
+
+  /// Ouvre le dialogue d'édition pré-rempli pour le morceau courant.
+  final Future<void> Function({
+    required String docId,
+    required String title,
+    required String album,
+    required String coverUrl,
+    required String audioUrl,
+  })
+  onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -1206,9 +1256,18 @@ class _TrackList extends StatelessWidget {
       itemCount: tracks.length,
       itemBuilder: (context, index) {
         final track = tracks[index];
+        final String docId = track['docId'] as String? ?? '';
         final String title = track['title'] as String? ?? 'Sans titre';
         final String? album = track['album'] as String?;
-        final String? imageUrl = track['cover_url'] as String?;
+        final String coverUrl =
+            (track['imageUrl'] as String?) ??
+            (track['cover_url'] as String?) ??
+            '';
+        final String imageUrl = coverUrl;
+        final String audioUrl =
+            (track['audioUrl'] as String?) ??
+            (track['audio_url'] as String?) ??
+            '';
         final Timestamp? createdAt = track['createdAt'] as Timestamp?;
 
         return Container(
@@ -1221,7 +1280,7 @@ class _TrackList extends StatelessWidget {
           ),
           child: Row(
             children: [
-              if (imageUrl != null && imageUrl.isNotEmpty)
+              if (imageUrl.isNotEmpty)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.network(
@@ -1273,11 +1332,29 @@ class _TrackList extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Supprimer',
-                icon: const Icon(Icons.delete_outline),
-                color: colors.error,
-                onPressed: () => onDelete(title),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Modifier',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: docId.isEmpty
+                        ? null
+                        : () => onEdit(
+                            docId: docId,
+                            title: title == 'Sans titre' ? '' : title,
+                            album: album ?? '',
+                            coverUrl: coverUrl,
+                            audioUrl: audioUrl,
+                          ),
+                  ),
+                  IconButton(
+                    tooltip: 'Supprimer',
+                    icon: const Icon(Icons.delete_outline),
+                    color: colors.error,
+                    onPressed: docId.isEmpty ? null : () => onDelete(docId),
+                  ),
+                ],
               ),
             ],
           ),
